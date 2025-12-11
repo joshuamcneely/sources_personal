@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16GB
 #SBATCH --time=04:00:00
-#SBATCH --partition=compute
+#SBATCH --partition=defq
 #SBATCH --output=postprocess_batch_%j.log
 #SBATCH --error=postprocess_batch_%j.err
 
