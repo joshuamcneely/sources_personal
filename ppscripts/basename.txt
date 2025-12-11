@@ -1,1 +1,1 @@
-rs_slip_rsw
+rs_slip_asp_XL_v1_0
