@@ -1,5 +1,4 @@
-# Ada HPC Configuration
-# University of York - Ada Supercomputer
+
 
 # Base paths for uguca_project on Ada
 BASE_PROJECT = '/gpfs01/home/pmyjm22/uguca_project'
