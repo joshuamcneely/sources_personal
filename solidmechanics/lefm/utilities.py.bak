@@ -1,0 +1,140 @@
+# utilities.py
+#
+# functions used for various things in lefm
+# 
+# There is no warranty for this code
+#
+# @version 1.0
+# @author David Kammer <dkammer@ethz.ch>
+# @author Gabriele Albertini <ga288@cornell.edu>
+# @date     2015/10/01
+# @modified 2020/12/21
+
+from __future__ import print_function, division, absolute_import
+
+import numpy as np
+from scipy.integrate import quad
+from scipy import real as scpreal
+from scipy import imag as scpimag
+
+from ..definitions import smd
+
+def check_cohesive_zone_f(iface):
+    if iface.get(smd.cohesive_zone_f):
+        tau=iface[smd.cohesive_zone_f]
+        assert(tau(0)==1.0)
+
+def complex_quadrature(func, a, b, **kwargs):
+    """
+    Compute the complexe quadrature of a function
+
+    Args:
+       func(function): function to integrate
+       a(float): lower limite of integration
+       b(float):upper limit of integration
+       **kwargs
+
+    Returns:
+       tuple: - (complex) A complex which is the sum of the integral of the real part of the function and i * the integral of the imaginary  of the function
+              - (float) estimate of the absolute error
+              - (dict) a dictionary containing additional information
+        """
+    
+    def real_func(x):
+        """Return the real part of the function func(x)
+
+        Args:
+           x(complex)
+
+        Returns:
+           Real part of func(x)
+        """
+
+        return scpreal(func(x))
+
+    def imag_func(x):
+        """Return the imaginary part of the function func(x)
+
+        Args:
+           x(complex)
+
+        Returns:
+           Imaginary part of func(x)
+        """
+
+        return scpimag(func(x))
+
+    real_integral = quad(real_func, a, b, **kwargs)
+    imag_integral = quad(imag_func, a, b, **kwargs)
+    return (real_integral[0] + 1j*imag_integral[0], 
+            real_integral[1:], 
+            imag_integral[1:])
+
+
+def my_integralSingular(f,g,a,b):
+    """ integrate singular function
+    Args:
+        f (function) with singularity at t=0
+        g (float)
+        a (float)
+
+    Solves improper integral that has a snigularity of 0<g<1 at on of the
+    borders. From Numerical Recipes - improper integrals 4.4
+    f is function hamdle, for example f=@(x) 1./x.^g
+    [a,b] the lower and upper limit
+
+    Due to precision limitations matlab behaves bad for g>0.7 
+    if the singularity is not at t=0 change variable before using 
+    the function to have the singularuty at 0
+    """
+    if a==0:#True:# (np.abs(f(a))==np.inf):
+        integrand = lambda t: 1/(1-g)*t**(g/(1-g)) * f(a+t**(1. / (1-g)));
+    elif b==0:#(np.abs(f(b))==np.inf):
+        integrand = lambda t: 1/(1-g)*t**(g/(1-g)) * f(b-t**(1. / (1-g)));
+    I = complex_quadrature(integrand,0,(b-a)**(1-g))
+
+    return I
+
+
+def test_lefm_utilities():
+
+    a=0;
+    b=1;
+
+    g=.6
+    f= lambda x : 1./x**g
+    I = my_integralSingular(f,g,a,b)
+    if abs(I[0]-2.5)>1e-12:
+        print(I)
+        print('should be', 2.5)
+        raise RuntimeError
+
+
+    g=.7
+    f= lambda x : 1./x**g
+    I = my_integralSingular(f,g,a,b)
+    if abs(I[0]-1./3-3)>1e-12:
+        print(I)
+        print('should be', 1./3-3)
+        print(abs(I[0]-1./3-3))
+        raise RuntimeError
+
+    a=-1;
+    b=0;
+
+    g=.7
+    f= lambda x : 1./(x+0j)**g
+
+    I = my_integralSingular(f,g,a,b)
+    if abs(I[0] -( -1.959284174308243 - 2.696723314583158j)  )>1e-12:
+        print(I)
+        print('should be', 1./3-3)
+        print(abs(I[0]-1./3-3))
+        raise RuntimeError
+
+
+# ---------------------------------------------------------
+if (__name__ == '__main__'):
+    print('unit tests: lefm utilities')
+    test_lefm_utilities()
+    print('success!')

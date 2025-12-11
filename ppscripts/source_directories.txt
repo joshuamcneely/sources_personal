@@ -1,0 +1,4 @@
+# Ada HPC Simulation Output Directories
+# ppscripts location: /gpfs01/home/pmyjm22/uguca_project/source/sources/ppscripts
+
+/gpfs01/home/pmyjm22/uguca_project/results
