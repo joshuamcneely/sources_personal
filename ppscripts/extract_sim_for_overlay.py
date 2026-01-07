@@ -16,7 +16,7 @@ SENSOR_LOCATIONS = [0.05, 0.25, 0.45, 0.65, 0.85, 1.05, 1.25, 1.45, 1.65, 1.85, 
 # Defaults
 DEFAULT_WDIR = "./data"
 GROUP_NAME = "interface" # or 'slider_bottom', etc. depending on where data is
-FIELD_NAME = "slip"      # or 'displacement'
+FIELD_NAME = "top_disp"  # Extracted field from simulation (usually tangential displacement)
 FIELD_COMP = 0           # Component index (0 for x/tangential, 1 for y/normal)
 # --------------------------------------------
 
@@ -86,7 +86,19 @@ def extract_and_save(sim_name, wdir):
     # Shape: (Num_Sensors, Num_TimeSteps)
     field_data = np.zeros((len(node_indices), num_steps))
     
-    target_fld = idm.FieldId(FIELD_NAME, FIELD_COMP)
+    # NOTE: top_disp only has one component usually, so component index might be irrelevant or 0
+    # FieldId for top_disp usually doesn't need a component index if it's scalar, 
+    # but idm.FieldId usually requires one.
+    # Based on file listing (top_disp.mmp), it acts like a scalar or vector.
+    # In waterfall script fldid was passed in.
+    
+    # We will try to construct FieldId based on FIELD_NAME
+    # If it fails, we might need to adjust based on specific FieldId definition for top_disp
+    if FIELD_NAME == 'top_disp':
+         # top_disp is often scalar (component 0) or we just ask for component 0
+         target_fld = idm.FieldId(FIELD_NAME, 0)
+    else:
+         target_fld = idm.FieldId(FIELD_NAME, FIELD_COMP)
     
     for t_idx in range(num_steps):
         val_container = data.get_field_at_t_index(target_fld, t_idx)[0]
@@ -94,9 +106,10 @@ def extract_and_save(sim_name, wdir):
         vals = np.array(val_container)
         
         # Extract specific nodes
-        field_data[:, t_idx] = vals[node_indices]
+        # MULTIPLY BY 2.0 TO GET TOTAL SLIP
+        field_data[:, t_idx] = vals[node_indices] * 2.0
 
-    print(f"Extraction complete. Shape: {field_data.shape}")
+    print(f"Extraction complete (x2 applied). Shape: {field_data.shape}")
     
     # 4. Save
     np.savez(output_filename, time=times, data=field_data, locations=np.array(found_locs))
