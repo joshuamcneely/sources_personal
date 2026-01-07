@@ -72,7 +72,8 @@ def extract_and_save(sim_name, wdir):
     
     # Time array
     time_fld = idm.FieldId("time")
-    num_steps = data.get_number_of_time_steps()
+    # Use get_t_index('last') to get the number of time steps (or end index)
+    num_steps = data.get_t_index('last')
     times = []
     
     for t_idx in range(num_steps):
