@@ -95,8 +95,8 @@ def extract_and_save(sim_name, wdir):
     # We will try to construct FieldId based on FIELD_NAME
     # If it fails, we might need to adjust based on specific FieldId definition for top_disp
     if FIELD_NAME == 'top_disp':
-         # top_disp is often scalar (component 0) or we just ask for component 0
-         target_fld = idm.FieldId(FIELD_NAME, 0)
+         # top_disp is scalar (no component index in key usually)
+         target_fld = idm.FieldId(FIELD_NAME)
     else:
          target_fld = idm.FieldId(FIELD_NAME, FIELD_COMP)
     
