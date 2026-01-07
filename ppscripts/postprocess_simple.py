@@ -66,6 +66,23 @@ def main():
     else:
         bname = input_path
         sdir = '.'
+        
+        # Check source_directories.txt if it exists
+        if os.path.exists('source_directories.txt'):
+             with open('source_directories.txt', 'r') as f:
+                 sdirs = [line.strip() for line in f if line.strip()]
+             
+             print(f"Searching for {bname} in: {sdirs}")
+             found = False
+             for path in sdirs:
+                 if os.path.exists(os.path.join(path, bname + '.progress')):
+                     sdir = path
+                     print(f"Found in {sdir}")
+                     found = True
+                     break
+             
+             if not found and sdir == '.':
+                 print(f"Warning: {bname}.progress not found in source_directories.txt paths. Checking local directory.")
 
     wdir = 'data/'
     if not os.path.exists(wdir):
