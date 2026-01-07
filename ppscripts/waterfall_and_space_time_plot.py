@@ -24,7 +24,14 @@ def get_node_time_histories(sname, group, fldid, num_nodes=16, **kwargs):
 
     # 1. Load Simulation Data
     dma = idm.DataManagerAnalysis(sname, wdir)
-    data = dma(group)
+    try:
+        data = dma(group)
+    except RuntimeError:
+        print("Error: FieldCollection group '{}' not found in simulation '{}'.".format(group, sname))
+        print("Available groups:")
+        for fc in dma.get_all_field_collections():
+            print(" - {}".format(fc.get_name()))
+        sys.exit(1)
 
     # 2. Determine Spatial Indices
     if data.has_field(idm.FieldId('position', 0)):
