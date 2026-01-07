@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:30:00
 #SBATCH --mem=4G
-#SBATCH --array=1-137%20   # Adjust 137 to total number of simulations
+#SBATCH --array=1-162%20   # Process all 162 simulations
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
