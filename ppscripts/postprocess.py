@@ -435,7 +435,7 @@ def postprocess(sim_id,mode,new_sname=None):
 if __name__ == "__main__":
 
     if len(sys.argv) < 2 or len(sys.argv) > 3:
-        sys.exit('Missing argument! usage: ./postprocess.py sim-id [new-name]')
+        sys.exit('Missing argument! usage: ./postprocess.py sim-id [mode/new-name]')
 
     # simid can be 22,24,30-33 -> [22,24,30,31,32,33]      
     if len(sys.argv) == 2:
@@ -444,7 +444,16 @@ if __name__ == "__main__":
             print('postprocess simid={}'.format(simid))
             postprocess(simid,'interactive')
     else:
-        postprocess(sys.argv[1],'interactive',sys.argv[2])
+        # Check if the second argument is a mode
+        arg2 = sys.argv[2]
+        if arg2 in ['interactive', 'save', 'forced']:
+            simids = string_to_simidlist(str(sys.argv[1]))
+            for simid in simids:
+                print('postprocess simid={} mode={}'.format(simid, arg2))
+                postprocess(simid, arg2)
+        else:
+            # Assume it is a new name (legacy behavior)
+            postprocess(sys.argv[1],'interactive',arg2)
 
 
     
