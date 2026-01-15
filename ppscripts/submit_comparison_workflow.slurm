@@ -13,11 +13,24 @@
 echo "Starting Comparison Workflow on $(hostname)"
 echo "Date: $(date)"
 
-# 1. Extraction Phase
+# 1. Post-process Data-Driven Sims (Fix missing data structures)
 echo "----------------------------------------------------------------"
-echo "PHASE 1: Extracting Simulation Data to NPZ"
+echo "PHASE 1: Post-processing Data-Driven Runs"
 echo "----------------------------------------------------------------"
-python extract_all_for_comparison.py
+python process_dd_sims.py
+
+# 2. Extract Displacement Data
+echo "----------------------------------------------------------------"
+echo "PHASE 2: Extracting Data to NPZ"
+echo "----------------------------------------------------------------"
+python extract_disp_for_comparison.py
+
+# 3. Compare and Plot
+echo "----------------------------------------------------------------"
+echo "PHASE 3: Comparing and Plotting"
+echo "----------------------------------------------------------------"
+# Usage: python compare_all_experiments.py [exp_folder] [sim_folder] [dd_sim_folder]
+python compare_all_experiments.py data_experiments extracted_npz/original extracted_npz/datadriven
 
 if [ $? -ne 0 ]; then
     echo "Error during extraction. Exiting."

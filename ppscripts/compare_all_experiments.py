@@ -280,7 +280,18 @@ def plot_family_comparison(exp_path, exp_name_core, sim_cache, dd_sim_cache, out
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python compare_all_experiments.py [exp_folder] [sim_folder]
+        print("Usage: python compare_all_experiments.py [exp_folder] [sim_folder] [dd_sim_folder (optional)]")
+        sys.exit(1)
+        
+    exp_folder = sys.argv[1]
+    sim_folder = sys.argv[2]
+    dd_sim_folder = sys.argv[3] if len(sys.argv) > 3 else None
+    
+    print(f"Experiments Dir: {exp_folder}")
+    print(f"Original Sims Dir: {sim_folder}")
+    if dd_sim_folder:
+        print(f"Data-Driven Sims Dir: {dd_sim_folder}")
+    
     exp_files = sorted(glob.glob(os.path.join(exp_folder, "*_displacement.csv")))
     sim_files = sorted(glob.glob(os.path.join(sim_folder, "*.npz")))
     dd_sim_files = sorted(glob.glob(os.path.join(dd_sim_folder, "*.npz"))) if dd_sim_folder else []
