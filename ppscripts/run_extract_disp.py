@@ -16,6 +16,17 @@ SENSOR_LOCATIONS = [
     0.05, 0.25, 0.45, 0.65, 0.85, 1.05, 1.25, 1.45, 
     1.65, 1.85, 2.05, 2.25, 2.45, 2.65, 2.85, 3.05
 ]
+MAPPING_FILE = "dd_sim_mapping.txt"
+
+def load_mapping():
+    mapping = {}
+    if os.path.exists(MAPPING_FILE):
+        with open(MAPPING_FILE, "r") as f:
+            for line in f:
+                parts = line.strip().split(" -> ")
+                if len(parts) == 2:
+                    mapping[parts[0]] = parts[1]
+    return mapping
 
 def extract_sim(sname, output_path):
     # Standardize name
@@ -105,6 +116,8 @@ def extract_sim(sname, output_path):
 def main():
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
+        
+    mapping = load_mapping()
 
     # Identify available simulations in data/
     available_sims = set()
@@ -115,23 +128,28 @@ def main():
             available_sims.add(item.replace(".datamanager.info", ""))
             
     # Filter for relevant simulations:
-    # 1. 'dd_exp' runs
+    # 1. 'dd_exp' or 'dd_sim' runs
     # 2. 'original' runs referenced by the dd_exp names (e.g. dd_exp_params_vs_OriginalName)
     
     target_sims = set()
-    dd_sims = [s for s in available_sims if "dd_exp" in s]
+    
+    # Current detected names in data/ (likely dd_sim_XX)
+    dd_sims = [s for s in available_sims if "dd_exp" in s or "dd_sim" in s]
     target_sims.update(dd_sims)
     
     for dd in dd_sims:
+        # Resolve original name to find comparison target
+        original_sname = mapping.get(dd, dd)
+        
         # Check for comparison target in name
-        if "_vs_" in dd:
-            parts = dd.split("_vs_")
+        if "_vs_" in original_sname:
+            parts = original_sname.split("_vs_")
             if len(parts) > 1:
                 orig_name = parts[-1]
-                # Try to fuzzy match or direct match
+                # Try to fuzzy match or direct match in available sims
                 if orig_name in available_sims:
                     target_sims.add(orig_name)
-                # Maybe it has prefixes?
+                # Maybe it has prefixes or suffixes?
                 else:
                     # Try finding sname ending with orig_name
                     matches = [s for s in available_sims if s.endswith(orig_name)]
@@ -142,7 +160,7 @@ def main():
 
     for sname in sorted(list(target_sims)):
         # Determine output subfolder
-        if "dd_exp" in sname:
+        if "dd_exp" in sname or "dd_sim" in sname:
             subfolder = "datadriven"
         elif "gabs" in sname: 
             subfolder = "original"
