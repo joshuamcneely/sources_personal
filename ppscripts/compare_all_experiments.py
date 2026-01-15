@@ -104,7 +104,32 @@ def calculate_match_score(exp_t, exp_data, exp_locs, exp_col_map, sim_t, sim_dat
     if not all_sq_errors:
         return None  # No matching sensors
 
-    rmse = np.s
+    rmse = np.sqrt(np.mean(all_sq_errors))
+    return rmse
+
+def process_single_experiment(exp_path, sim_cache):
+    """
+    Compares one experiment against all simulations in cache.
+    Returns ranked list of {sim: name, rmse: score}
+    """
+    try:
+        df = pd.read_csv(exp_path)
+        t_exp = df.iloc[:, 0].values
+        exp_sensor_cols = df.columns[1:]
+        exp_data = df[exp_sensor_cols].values.T
+        exp_data = exp_data - exp_data[:, 0][:, None]
+        exp_locs, exp_col_map = parse_sensor_labels(exp_sensor_cols)
+    except Exception:
+        return []
+    
+    ranking = []
+    for sim_name, (t_sim, d_sim, l_sim) in sim_cache.items():
+        score = calculate_match_score(t_exp, exp_data, exp_locs, exp_col_map, t_sim, d_sim, l_sim)
+        if score is not None:
+            ranking.append({'sim': sim_name, 'rmse': score})
+    
+    ranking.sort(key=lambda x: x['rmse'])
+    return ranking[:TOP_N]
 
 def plot_three_way_comparison(exp_path, sim1_data_tuple, sim1_name, sim2_data_tuple, sim2_name, output_dir):
     """
