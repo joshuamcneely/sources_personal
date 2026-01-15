@@ -158,29 +158,54 @@ def main():
                         
     print(f"Found {len(dd_sims)} data-driven runs. Total extraction targets: {len(target_sims)}")
 
-    for sname in sorted(list(target_sims)):
-        # Determine output subfolder
-        if "dd_exp" in sname or "dd_sim" in sname:
-            subfolder = "datadriven"
-        elif "gabs" in sname: 
-            subfolder = "original"
-        else:
-            subfolder = "other"
+    sorted_targets = sorted(list(target_sims))
+
+    # Parallel Execution Logic
+    if len(sys.argv) > 1:
+        try:
+            # 1-based index from SLURM array
+            task_id = int(sys.argv[1])
+            # Adjust to 0-based for list access
+            idx = task_id - 1
             
-        target_dir = os.path.join(OUTPUT_DIR, subfolder)
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir)
+            if 0 <= idx < len(sorted_targets):
+                sname = sorted_targets[idx]
+                print(f"Processing Task ID {task_id}: {sname}")
+                process_single_sim(sname)
+            else:
+                print(f"Task ID {task_id} out of range (1-{len(sorted_targets)})")
+        except ValueError:
+            print("Invalid Task ID argument. Running all...")
+            process_all(sorted_targets)
+    else:
+        # Serial execution for all
+        process_all(sorted_targets)
+
+def process_single_sim(sname):
+    # Determine output subfolder
+    if "dd_exp" in sname or "dd_sim" in sname:
+        subfolder = "datadriven"
+    elif "gabs" in sname: 
+        subfolder = "original"
+    else:
+        subfolder = "other"
         
-        out_name = f"sim_comparison_{sname}.npz"
-        out_path = os.path.join(target_dir, out_name)
-        
-        if os.path.exists(out_path):
-             # Optional: Check if file is valid/empty? 
-             # For now, skip if exists to save time on re-runs
-             print(f"Skipping {sname} (Already extracted)")
-             continue
-             
-        extract_sim(sname, out_path)
+    target_dir = os.path.join(OUTPUT_DIR, subfolder)
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+    
+    out_name = f"sim_comparison_{sname}.npz"
+    out_path = os.path.join(target_dir, out_name)
+    
+    if os.path.exists(out_path):
+            print(f"Skipping {sname} (Already extracted)")
+            return
+            
+    extract_sim(sname, out_path)
+
+def process_all(targets):
+    for sname in targets:
+        process_single_sim(sname)
 
 if __name__ == "__main__":
     main()
