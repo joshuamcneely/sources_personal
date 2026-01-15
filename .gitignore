@@ -6,3 +6,5 @@ __pycache__/
 *.log
 *.out
 ppscripts/logs/
+ppscripts/process_dd_sims.py
+ppscripts/extract_disp_for_comparison.py
