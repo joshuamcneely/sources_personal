@@ -367,10 +367,17 @@ def main():
     os.makedirs("rankings", exist_ok=True)
     os.makedirs("data_plots", exist_ok=True)
     
+    # For parallel execution, write to task-specific file
+    if task_id is not None:
+        summary_file_path = f"rankings/task_{task_id}_matches.txt"
+    else:
+        summary_file_path = "rankings/all_top5_matches.txt"
+    
     # Open summary file
-    with open("rankings/all_top5_matches.txt", "w") as summary_file:
-        summary_file.write("Top Matches for Each Experiment\n")
-        summary_file.write("="*70 + "\n\n")
+    with open(summary_file_path, "w") as summary_file:
+        if task_id is None:
+            summary_file.write("Top Matches for Each Experiment\n")
+            summary_file.write("="*70 + "\n\n")
         
         # 3. Main Loop - Process ALL or SINGLE experiment (if task_id provided)
         exp_files_to_process = exp_files
