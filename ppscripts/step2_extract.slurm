@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=04:00:00
-#SBATCH --mem=24G
+#SBATCH --mem=12G
 
 echo "Starting Step 2: Extraction on $(hostname)"
 echo "Date: $(date)"
