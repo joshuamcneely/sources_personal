@@ -280,12 +280,20 @@ def plot_family_comparison(exp_path, exp_name_core, sim_cache, dd_sim_cache, out
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python compare_all_experiments.py [exp_folder] [sim_folder] [dd_sim_folder (optional)]")
+        print("Usage: python compare_all_experiments.py [exp_folder] [sim_folder] [dd_sim_folder (optional)] [task_id (optional)]")
         sys.exit(1)
         
     exp_folder = sys.argv[1]
     sim_folder = sys.argv[2]
     dd_sim_folder = sys.argv[3] if len(sys.argv) > 3 else None
+    
+    # Parse optional task ID for parallel execution
+    task_id = None
+    if len(sys.argv) > 4:
+        try:
+            task_id = int(sys.argv[4])
+        except ValueError:
+            pass
     
     print(f"Experiments Dir: {exp_folder}")
     print(f"Original Sims Dir: {sim_folder}")
@@ -339,8 +347,19 @@ def main():
         summary_file.write("Top Matches for Each Experiment\n")
         summary_file.write("="*70 + "\n\n")
         
-        # 3. Main Loop
-        for exp_path in exp_files:
+        # 3. Main Loop - Process ALL or SINGLE experiment (if task_id provided)
+        exp_files_to_process = exp_files
+        if task_id is not None:
+            # task_id is 1-based, convert to 0-based
+            idx = task_id - 1
+            if 0 <= idx < len(exp_files):
+                exp_files_to_process = [exp_files[idx]]
+                print(f"Processing Task ID {task_id}: {os.path.basename(exp_files[idx])}")
+            else:
+                print(f"Task ID {task_id} out of range (1-{len(exp_files)})")
+                return
+        
+        for exp_path in exp_files_to_process:
             exp_name = os.path.basename(exp_path).replace("_displacement.csv", "")
             print(f"\nProcessing: {exp_name}")
             
