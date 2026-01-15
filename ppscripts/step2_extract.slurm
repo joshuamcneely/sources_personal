@@ -10,4 +10,4 @@
 echo "Starting Step 2: Extraction on $(hostname)"
 echo "Date: $(date)"
 
-python extract_disp_for_comparison.py
+python run_extract_disp.py

@@ -10,4 +10,4 @@
 echo "Starting Step 1: Post-processing Data-Driven Sims on $(hostname)"
 echo "Date: $(date)"
 
-python process_dd_sims.py
+python run_process_dd.py
