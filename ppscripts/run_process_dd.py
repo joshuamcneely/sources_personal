@@ -68,38 +68,29 @@ def rename_simulations():
     
     current_id = max_id
     
-    # 3. Rename loop
+    # 3. Rename loop (Actually, we COPY the progress file)
     with open(MAPPING_FILE, "a") as f_map:
         for p_file in legacy_progress:
             current_id += 1
             
-            # Extract 'dd_exp_LONG_NAME' from path/dd_exp_LONG_NAME.progress
+            # Extract 'dd_exp_LONG_NAME' from path
             dir_name = os.path.dirname(p_file)
             file_name = os.path.basename(p_file)
             old_bname = file_name.replace(".progress", "")
             
             new_bname = f"{NEW_BASENAME}_{current_id}"
+            new_progress_file = os.path.join(dir_name, f"{new_bname}.progress")
             
-            print(f"Renaming: {old_bname} -> {new_bname}")
+            print(f"Mapping: {old_bname} -> {new_bname}")
             f_map.write(f"{new_bname} -> {old_bname}\n")
             
-            # Find all files starting with old_bname in the directory
-            # We use glob with specific pattern to avoid partial matches if names overlap
-            # But these names are long, overlap unlikely unless one is substring of other.
-            # safe glob: old_bname + "*"
-            related_files = glob.glob(os.path.join(dir_name, old_bname + "*"))
-            
-            for src in related_files:
-                f_base = os.path.basename(src)
-                if f_base.startswith(old_bname):
-                    # Replace prefix
-                    new_f_base = f_base.replace(old_bname, new_bname, 1)
-                    dst = os.path.join(dir_name, new_f_base)
-                    
-                    try:
-                        shutil.move(src, dst)
-                    except OSError as e:
-                        print(f"Error renaming {src}: {e}")
+            # Copy the .progress file to the new name
+            # We do NOT rename the data files, so the .progress content (which refers to old names)
+            # remains valid and points to the existing files.
+            try:
+                shutil.copyfile(p_file, new_progress_file)
+            except OSError as e:
+                print(f"Error copying {p_file}: {e}")
                         
     return current_id
 
