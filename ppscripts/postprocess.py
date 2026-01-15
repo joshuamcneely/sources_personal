@@ -324,6 +324,12 @@ def postprocess(sim_id,mode,new_sname=None):
             return False,None
     print('input_file={}'.format(input_file))
 
+    # FORCE new_sname to be consistent with external numbering if not explicitly provided
+    if new_sname is None:
+        new_sname = "{}_{}".format(basename, sim_id)
+    
+    print('new_sname={}'.format(new_sname))
+
     # new basename if needed
     if new_sname == None:
         new_sname = sname
