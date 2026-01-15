@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=04:00:00
-#SBATCH --mem=16G
+#SBATCH --mem=24G
 
 # Load environment (Adapt if you use modules, e.g., module load python)
 # source activate python_env 

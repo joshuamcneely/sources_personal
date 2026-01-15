@@ -140,14 +140,147 @@ def plot_three_way_comparison(exp_path, sim1_data_tuple, sim1_name, sim2_data_tu
 
     # Plot
     fig, axes = plt.subplots(len(exp_locs), 1, figsize=(10, 3*len(exp_locs)), sharex=True)
-    if len(exp_locs) == 1: axes = [axes] [optional: data_driven_sim_folder]")
-        sys.exit(1)
-
-    exp_folder = sys.argv[1]
-    sim_folder = sys.argv[2]
-    dd_sim_folder = sys.argv[3] if len(sys.argv) > 3 else None
+    if len(exp_locs) == 1: axes = [axes]
     
-    # 1. Find Data Files
+    for i, ax in enumerate(axes):
+        loc = exp_locs[i]
+        # Exp Trace
+        col_idx = exp_col_map[loc]
+        ax.plot(t_exp, exp_data[col_idx], 'k-', label='Experiment', linewidth=2, alpha=0.6)
+        
+        # Sim1 Trace
+        if t_sim1 is not None:
+            dists1 = [abs(loc - sl) for sl in l_sim1]
+            if min(dists1) < 0.02:
+                idx1 = dists1.index(min(dists1))
+                ax.plot(t_sim1_shifted, d_sim1[idx1], 'b--', label=f'Orig: {sim1_name}', linewidth=1.5)
+
+        # Sim2 Trace
+        if t_sim2 is not None:
+            dists2 = [abs(loc - sl) for sl in l_sim2]
+            if min(dists2) < 0.02:
+                idx2 = dists2.index(min(dists2))
+                ax.plot(t_sim2_shifted, d_sim2[idx2], 'r-.', label=f'Data: {sim2_name}', linewidth=1.5)
+            
+        ax.set_ylabel(f"Slip ($\mu m$) @ {loc}m")
+        ax.grid(True, linestyle=':', alpha=0.6)
+        if i == 0:
+            ax.legend()
+            ax.set_title(f"{os.path.basename(exp_path)}")
+            
+    axes[-1].set_xlabel("Time (s)")
+    plt.tight_layout()
+    plot_name = os.path.basename(exp_path).replace('.csv', '') + '_comparison.png'
+    plt.savefig(os.path.join(output_dir, plot_name), dpi=150)
+    plt.close()
+
+def plot_family_comparison(exp_path, exp_name_core, sim_cache, dd_sim_cache, output_dir):
+    """
+    Plots:
+    1. Experiment (Black)
+    2. 'gabs_fine' Original Sims that this experiment's DD runs are based on (Blue dashed)
+    3. ALL Data Driven runs associated with this experiment (Red/Orange lines)
+    """
+    # 1. Start Figure
+    try:
+        df = pd.read_csv(exp_path)
+        t_exp = df.iloc[:, 0].values
+        exp_sensor_cols = df.columns[1:]
+        exp_data = df[exp_sensor_cols].values.T
+        exp_data = exp_data - exp_data[:, 0][:, None]
+        exp_locs, exp_col_map = parse_sensor_labels(exp_sensor_cols)
+    except Exception as e:
+        print(f"Error loading exp for family plot: {e}")
+        return
+
+    # Align Exp Onset
+    t_exp_onset = estimate_onset(t_exp, exp_data)
+    
+    # 2. Identify Relevant DD Runs
+    # Looking for keys in dd_sim_cache that start with "dd_exp_{exp_name_core}"
+    relevant_dd_keys = [k for k in dd_sim_cache.keys() if f"dd_exp_{exp_name_core}" in k]
+    
+    if not relevant_dd_keys:
+        return # No family to plot
+        
+    # 3. Identify Relevant Original Sims base on DD names
+    # Key format: dd_exp_EXPNAME_vs_ORIGSIMNAME
+    relevant_orig_keys = set()
+    for k in relevant_dd_keys:
+        # A bit of a hacky parse. Let's assume structure is consistently _vs_
+        # Example: dd_exp_FS01-...-Event3_vs_gabs_rep_2
+        parts = k.split("_vs_")
+        if len(parts) > 1:
+            # We need to clean sim name. Usually just the part after vs
+            # But the key in sim_cache was cleaned during loading.
+            # Usually: gabs_rep_2
+            candidate = parts[1] 
+            # It might have suffixes from the original filename cleaning?
+            
+            # Let's search for partial match in sim_cache keys
+            for sim_key in sim_cache.keys():
+                if candidate in sim_key or sim_key in candidate:
+                     relevant_orig_keys.add(sim_key)
+
+    # 4. Plot Setup
+    fig, axes = plt.subplots(len(exp_locs), 1, figsize=(10, 3*len(exp_locs)), sharex=True)
+    if len(exp_locs) == 1: axes = [axes]
+
+    for i, ax in enumerate(axes):
+        loc = exp_locs[i]
+        col_idx = exp_col_map[loc]
+        
+        # Plot Experiment
+        ax.plot(t_exp, exp_data[col_idx], 'k-', label='Experiment' if i==0 else "", linewidth=2.5, zorder=10)
+        
+        # Plot Original Sims (Blue)
+        for orig_name in relevant_orig_keys:
+            if orig_name not in sim_cache: continue
+            t, d, l = sim_cache[orig_name]
+            
+            dists = [abs(loc - sl) for sl in l]
+            min_dist = min(dists)
+            if min_dist < 0.02:
+                idx = dists.index(min_dist)
+                # Align
+                t_onset = estimate_onset(t, d)
+                t_shift = t + (t_exp_onset - t_onset)
+                
+                label = f"Orig: {orig_name}" if i==0 else ""
+                ax.plot(t_shift, d[idx], 'b--', label=label, linewidth=1.5, alpha=0.7)
+
+        # Plot DD Sims (Red/Orange)
+        cmap = plt.get_cmap('autumn')
+        for j, dd_name in enumerate(relevant_dd_keys):
+            t, d, l = dd_sim_cache[dd_name]
+            
+            dists = [abs(loc - sl) for sl in l]
+            min_dist = min(dists)
+            if min_dist < 0.02:
+                idx = dists.index(min_dist)
+                # Align
+                t_onset = estimate_onset(t, d)
+                t_shift = t + (t_exp_onset - t_onset)
+                
+                color = cmap(j / len(relevant_dd_keys))
+                label = "Data Driven" if (i==0 and j==0) else ""
+                ax.plot(t_shift, d[idx], color=color, linestyle='-.', label=label, linewidth=1.0, alpha=0.8)
+
+        ax.set_ylabel(f"Slip ($\mu m$) @ {loc}m")
+        ax.grid(True, linestyle=':', alpha=0.6)
+        if i == 0:
+            ax.legend()
+            ax.set_title(f"Family: {os.path.basename(exp_path)}")
+
+    axes[-1].set_xlabel("Time (s)")
+    plt.tight_layout()
+    plot_name = os.path.basename(exp_path).replace('.csv', '') + '_family_comparison.png'
+    plt.savefig(os.path.join(output_dir, plot_name), dpi=150)
+    plt.close()
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: python compare_all_experiments.py [exp_folder] [sim_folder]
     exp_files = sorted(glob.glob(os.path.join(exp_folder, "*_displacement.csv")))
     sim_files = sorted(glob.glob(os.path.join(sim_folder, "*.npz")))
     dd_sim_files = sorted(glob.glob(os.path.join(dd_sim_folder, "*.npz"))) if dd_sim_folder else []
@@ -168,7 +301,6 @@ def plot_three_way_comparison(exp_path, sim1_data_tuple, sim1_name, sim2_data_tu
         cache = {}
         for f in files:
             sim_name = os.path.basename(f).replace("sim_comparison_", "").replace(".npz", "")
-            if 'gabs_fine' in sim_name: continue
             
             t, data, locs = load_simulation(f)
             if t is not None:
@@ -231,7 +363,7 @@ def plot_three_way_comparison(exp_path, sim1_data_tuple, sim1_name, sim2_data_tu
             summary_file.write("\n")
             
             # --- Plotting ---
-            # If we have at least one match type, plot
+            # If we have at least one match type, plot Best Match
             if ranking_orig or ranking_dd:
                 plot_three_way_comparison(
                     exp_path, 
@@ -239,78 +371,20 @@ def plot_three_way_comparison(exp_path, sim1_data_tuple, sim1_name, sim2_data_tu
                     best_dd_data, best_dd_name,
                     "data_plots"
                 )
-
-    print("\n" + "="*60)
-    print("Done.
-
-    print(f"Found {len(exp_files)} Experiments and {len(sim_files)} Simulations.")
-    
-    # 2. Pre-load ALL Simulations into Memory (Performance Optimization)
-    print("Pre-loading simulation data...")
-    sim_cache = {}
-    for f in sim_files:
-        sim_name = os.path.basename(f).replace("sim_comparison_", "").replace(".npz", "")
-        # Filter logic here if strictly needed:
-        if 'gabs_fine' in sim_name: continue
-        
-        t, data, locs = load_simulation(f)
-        if t is not None:
-            sim_cache[sim_name] = (t, data, locs)
-    
-    print(f"Loaded {len(sim_cache)} unique simulations.")
-    print("Beginning pairwise comparison...")
-    print("="*60)
-
-    # Create output directories
-    os.makedirs("rankings", exist_ok=True)
-    os.makedirs("data_plots", exist_ok=True)
-    
-    # Open summary file
-    with open("rankings/all_top5_matches.txt", "w") as summary_file:
-        summary_file.write("Top 5 Matches for Each Experiment\n")
-        summary_file.write("="*70 + "\n\n")
-        
-        # 3. Main Loop
-        for exp_path in exp_files:
-            exp_name = os.path.basename(exp_path).replace("_displacement.csv", "")
-            print(f"\nProcessing: {exp_name}")
             
-            ranking = process_single_experiment(exp_path, sim_cache)
-            
-            # Display Top N
-            print(f"{'Rank':<5} | {'Simulation Name':<40} | {'RMSE':<10}")
-            print("-" * 65)
-            for i, match in enumerate(ranking[:TOP_N]):
-                print(f"{i+1:<5} | {match['sim']:<40} | {match['rmse']:.4f}")
-            
-            # Write top 5 to summary file
-            summary_file.write(f"{exp_name}\n")
-            summary_file.write("-" * 70 + "\n")
-            for i, match in enumerate(ranking[:5]):
-                summary_file.write(f"{i+1:2d}. {match['sim']:<40} RMSE: {match['rmse']:8.4f}\n")
-            summary_file.write("\n")
-            
-            # Plot top match using the same plotting function as find_best_match.py
-            if ranking:
-                top_sim = ranking[0]['sim']
-                # Find the sim file path
-                sim_file_name = f"sim_comparison_{top_sim}.npz"
-                sim_file_path = os.path.join(sim_folder, sim_file_name)
-                
-                if os.path.exists(sim_file_path):
-                    try:
-                        plot_slip_data(exp_path, 
-                                      sim_path=sim_file_path, 
-                                      auto_align=True, 
-                                      save_suffix=f"_{top_sim}",
-                                      show_plot=False)
-                    except Exception as e:
-                        print(f"  Warning: Could not plot {exp_name}: {e}")
+            # --- Family Plotting ---
+            # Plot all DD runs associated with this specific experiment vs the orig sim they used
+            if dd_sim_files:
+                plot_family_comparison(
+                    exp_path,
+                    exp_name,
+                    sim_cache,
+                    dd_sim_cache,
+                    "data_plots"
+                )
 
     print("\n" + "="*60)
     print("Done.")
-    print(f"Rankings saved to: rankings/all_top5_matches.txt")
-    print(f"Plots saved to: data_plots/")
 
 if __name__ == "__main__":
     main()

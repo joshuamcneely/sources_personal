@@ -155,6 +155,9 @@ def plot_dual_visualization(sname, group, fldid, scaling_factor=None, **kwargs):
 
     # --- 3. Plotting ---
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    
+    # DEBUG: Verify values
+    print(" >> Plotting Data Range: {:.4f} to {:.4f} microns".format(np.min(U_matrix), np.max(U_matrix)))
 
     # --- NEW: ADD BIG RED TITLE ---
     fig.suptitle('SIMULATED', fontsize=30, color='red', fontweight='bold')
@@ -170,7 +173,7 @@ def plot_dual_visualization(sname, group, fldid, scaling_factor=None, **kwargs):
 
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Spatial Position (m)')
-    ax1.set_title("Waterfall: {} (x2 Slip)".format(fldid.get_string()))
+    ax1.set_title("Waterfall: Total Slip (2x {})".format(fldid.get_string()))
     
     ax1.set_yticks(np.arange(len(sorted_node_indices)))
     ax1.set_yticklabels(y_tick_labels)
@@ -185,7 +188,7 @@ def plot_dual_visualization(sname, group, fldid, scaling_factor=None, **kwargs):
                     extent=[times.min(), times.max(), -0.5, len(sorted_node_indices)-0.5])
     
     ax2.set_xlabel('Time (s)')
-    ax2.set_title("Heatmap: {} (Slip)".format(fldid.get_string()))
+    ax2.set_title("Heatmap: Total Slip (2x {})".format(fldid.get_string()))
     
     ax2.set_yticks(np.arange(len(sorted_node_indices)))
     ax2.set_yticklabels(y_tick_labels)
