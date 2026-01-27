@@ -16,7 +16,29 @@ ROI_X_MAX = 3.0  # STRICT LIMIT: Only plot sensors in this range (meters)
 NUM_NODES_DEFAULT = 48  # Increased for finer resolution
 # ---------------------
 
-def get_node_time_histories(sname, group, fldid, num_nodes=16, **kwargs):
+def select_disp_field(data):
+    """Choose a displacement field id that exists in the dataset."""
+    candidates = [
+        idm.FieldId('top_disp', 0),
+        idm.FieldId('top_disp', 1),
+        idm.FieldId('top_disp'),
+        idm.FieldId('interface_top_disp', 0),
+        idm.FieldId('interface_top_disp', 1),
+        idm.FieldId('disp', 0),
+        idm.FieldId('disp', 1),
+    ]
+    for fid in candidates:
+        if data.has_field(fid):
+            return fid
+    available = []
+    try:
+        available = [f.identity.get_string() for f in data.get_all_fields()]
+    except Exception:
+        pass
+    raise RuntimeError('no displacement field found; available fields: {}'.format(', '.join(available)))
+
+
+def get_node_time_histories(sname, group, fldid=None, num_nodes=16, **kwargs):
     """
     Extracts time histories for nodes strictly within the 0-3m ROI.
     Returns raw field data without normalization.
@@ -34,6 +56,10 @@ def get_node_time_histories(sname, group, fldid, num_nodes=16, **kwargs):
         for fc in dma.get_all_field_collections():
             print(" - {}".format(fc.get_name()))
         sys.exit(1)
+
+    # Choose displacement field if not provided
+    if fldid is None:
+        fldid = select_disp_field(data)
 
     # 2. Determine Spatial Indices
     if data.has_field(idm.FieldId('position', 0)):
@@ -83,8 +109,8 @@ def get_node_time_histories(sname, group, fldid, num_nodes=16, **kwargs):
     else:
         last_idx = data.get_index_of_closest_time(idm.FieldId('time'), end_time)
 
-    # Extract time array
-    time_steps = np.arange(start_idx, last_idx)
+    # Extract time array (inclusive of last_idx)
+    time_steps = np.arange(start_idx, last_idx + 1)
     time_array = []
     
     time_fld = idm.FieldId("time")
@@ -109,18 +135,23 @@ def get_node_time_histories(sname, group, fldid, num_nodes=16, **kwargs):
             vals.append(field_snapshot[n_idx])
         node_data[n_idx] = np.array(vals)
 
-    return time_array, node_data, node_indices, positions
+    # slip scaling factor: double only for top_disp* fields
+    slip_factor = 2.0 if str(fldid.name).startswith('top_disp') else 1.0
 
-def plot_dual_visualization(sname, group, fldid, scaling_factor=None, **kwargs):
+    return time_array, node_data, node_indices, positions, slip_factor
+
+def plot_dual_visualization(sname, group, fldid=None, scaling_factor=None, **kwargs):
     """
     Plots two subplots: Waterfall and Heatmap.
     Adds a big red 'SIMULATED' title.
     """
     num_nodes = kwargs.get('num_nodes', NUM_NODES_DEFAULT)
+    kwargs_clean = dict(kwargs)
+    kwargs_clean.pop('num_nodes', None)  # avoid passing num_nodes twice
     
     # --- 1. Get Data (Filtered) ---
-    times, data_dict, indices, all_positions = get_node_time_histories(
-        sname, group, fldid, num_nodes=num_nodes, **kwargs
+    times, data_dict, indices, all_positions, slip_factor = get_node_time_histories(
+        sname, group, fldid, num_nodes=num_nodes, **kwargs_clean
     )
 
     # Convert to Matrix
@@ -129,10 +160,9 @@ def plot_dual_visualization(sname, group, fldid, scaling_factor=None, **kwargs):
     
     y_tick_labels = []
     for i, n_idx in enumerate(sorted_node_indices):
-        # DIRECT ASSIGNMENT with UNIT CONVERSION
-        # 1. Multiply by 2.0: Top Disp -> Total Slip (Meters)
-        # 2. Multiply by 1e6: Meters -> Microns
-        U_matrix[i, :] = data_dict[n_idx] * 2.0 * 1e6
+        series = data_dict[n_idx]
+        series = (series - series[0]) * slip_factor * 1e6
+        U_matrix[i, :] = series
         
         # Get position for label
         pos_raw = all_positions[n_idx]
@@ -175,7 +205,7 @@ def plot_dual_visualization(sname, group, fldid, scaling_factor=None, **kwargs):
 
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Spatial Position (m)')
-    ax1.set_title("Waterfall: Total Slip (2x {})".format(fldid.get_string()))
+    ax1.set_title("Waterfall: Slip ({})".format(fldid.get_string()))
     
     ax1.set_yticks(np.arange(len(sorted_node_indices)))
     ax1.set_yticklabels(y_tick_labels)
@@ -190,7 +220,7 @@ def plot_dual_visualization(sname, group, fldid, scaling_factor=None, **kwargs):
                     extent=[times.min(), times.max(), -0.5, len(sorted_node_indices)-0.5])
     
     ax2.set_xlabel('Time (s)')
-    ax2.set_title("Heatmap: Total Slip (2x {})".format(fldid.get_string()))
+    ax2.set_title("Heatmap: Slip ({})".format(fldid.get_string()))
     
     ax2.set_yticks(np.arange(len(sorted_node_indices)))
     ax2.set_yticklabels(y_tick_labels)
@@ -209,11 +239,13 @@ def plot_velocity_heatmap(sname, group, **kwargs):
     Plots a heatmap of velocity data (top_velo field).
     """
     num_nodes = kwargs.get('num_nodes', NUM_NODES_DEFAULT)
+    kwargs_clean = dict(kwargs)
+    kwargs_clean.pop('num_nodes', None)
     
     # --- 1. Get Velocity Data (Filtered) ---
     velo_fldid = idm.FieldId('top_velo', 0)
-    times, data_dict, indices, all_positions = get_node_time_histories(
-        sname, group, velo_fldid, num_nodes=num_nodes, **kwargs
+    times, data_dict, indices, all_positions, _ = get_node_time_histories(
+        sname, group, velo_fldid, num_nodes=num_nodes, **kwargs_clean
     )
 
     # Convert to Matrix
@@ -331,7 +363,7 @@ def load_experimental_data(csv_path, nb_nodes=2048, duration=0.015, nb_steps=Non
     
     for sensor_idx, pos in zip(valid_sensor_nodes, valid_positions):
         slip_microns = U_windowed[sensor_idx - valid_sensor_nodes[0], :] if sensor_idx - valid_sensor_nodes[0] < U_windowed.shape[0] else np.zeros(len(t_windowed))
-        slip_meters = slip_microns * 1e-6 / 2.0  # Convert to meters, divide by 2
+        slip_meters = slip_microns * 1e-6  # Convert to meters (experimental already total slip)
         
         # Interpolate to simulation timesteps
         sim_times = np.arange(nb_steps + 1) * dt_sim
@@ -341,15 +373,17 @@ def load_experimental_data(csv_path, nb_nodes=2048, duration=0.015, nb_steps=Non
     
     return t_sim, exp_data_dict, exp_positions
 
-def plot_combined_waterfall(sname, group, fldid, exp_data_dict=None, exp_positions=None, scaling_factor=None, **kwargs):
+def plot_combined_waterfall(sname, group, fldid=None, exp_data_dict=None, exp_positions=None, scaling_factor=None, **kwargs):
     """
     Plots waterfall with both simulation and experimental data overlaid.
     """
     num_nodes = kwargs.get('num_nodes', NUM_NODES_DEFAULT)
+    kwargs_clean = dict(kwargs)
+    kwargs_clean.pop('num_nodes', None)
     
     # --- 1. Get Simulation Data ---
-    times, data_dict, indices, all_positions = get_node_time_histories(
-        sname, group, fldid, num_nodes=num_nodes, **kwargs
+    times, data_dict, indices, all_positions, slip_factor = get_node_time_histories(
+        sname, group, fldid, num_nodes=num_nodes, **kwargs_clean
     )
 
     sorted_node_indices = sorted(indices)
@@ -357,7 +391,9 @@ def plot_combined_waterfall(sname, group, fldid, exp_data_dict=None, exp_positio
     
     y_tick_labels = []
     for i, n_idx in enumerate(sorted_node_indices):
-        U_sim_matrix[i, :] = data_dict[n_idx] * 2.0 * 1e6
+        series = data_dict[n_idx]
+        series = (series - series[0]) * slip_factor * 1e6
+        U_sim_matrix[i, :] = series
         
         pos_raw = all_positions[n_idx]
         if isinstance(pos_raw, (np.ndarray, list)) and len(pos_raw) > 0:
@@ -402,7 +438,7 @@ def plot_combined_waterfall(sname, group, fldid, exp_data_dict=None, exp_positio
                     break
             
             if closest_idx is not None:
-                exp_microns = exp_data * 2.0 * 1e6
+                exp_microns = exp_data * 1e6
                 visual_trace_exp = (exp_microns * scaling_factor) + closest_idx
                 ax.plot(times, visual_trace_exp, color='blue', linewidth=1.2, linestyle='--', 
                         label='Experimental' if sensor_idx == list(exp_data_dict.keys())[0] else "")
@@ -440,7 +476,7 @@ def plot_experimental_heatmap(exp_data_dict, exp_positions, sname, **kwargs):
     
     y_tick_labels = []
     for i, sensor_idx in enumerate(sorted_indices):
-        U_exp_matrix[i, :] = exp_data_dict[sensor_idx] * 2.0 * 1e6  # to microns
+        U_exp_matrix[i, :] = exp_data_dict[sensor_idx] * 1e6  # to microns
         y_tick_labels.append("{:.2f} m".format(sorted_positions[i]))
     
     # --- Plotting ---
@@ -475,7 +511,7 @@ if __name__ == "__main__":
     group = str(sys.argv[2])
     fldid_str = str(sys.argv[3])
     
-    fldid = idm.FieldId.string_to_fieldid(fldid_str)
+    fldid = None if fldid_str.lower() == 'auto' else idm.FieldId.string_to_fieldid(fldid_str)
 
     exp_csv_path = None
     scale = None

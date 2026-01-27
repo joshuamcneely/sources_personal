@@ -80,7 +80,7 @@ def load_experimental_csv(csv_path):
     t_full = df[time_col].values
     U_raw = df[sensor_cols].values.T  # (n_sensors, n_times)
 
-    # Relative slip per sensor
+    # Relative slip per sensor (global zero)
     U_rel = U_raw - U_raw[:, [0]]
 
     # Onset detection (peak slip rate)
@@ -95,6 +95,17 @@ def load_experimental_csv(csv_path):
     t_aligned = t_full - t_onset
 
     return t_aligned, U_rel  # microns
+
+
+def estimate_onset(time_arr, slip_arr):
+    """Find onset time via peak gradient of mean |slip|; fall back to first sample."""
+    avg_slip = np.mean(np.abs(slip_arr), axis=0)
+    try:
+        grad = np.gradient(avg_slip)
+        onset_idx = np.argmax(grad)
+        return time_arr[onset_idx]
+    except Exception:
+        return time_arr[0]
 
 
 def get_positions_and_indices(dma):
@@ -116,6 +127,32 @@ def get_positions_and_indices(dma):
     return coords_x
 
 
+def select_disp_field(data):
+    """Choose a displacement field id that exists in the dataset."""
+    candidates = [
+        idm.FieldId("top_disp", 0),
+        idm.FieldId("top_disp", 1),
+        idm.FieldId("top_disp"),
+        idm.FieldId("interface_top_disp", 0),
+        idm.FieldId("interface_top_disp", 1),
+        idm.FieldId("disp", 0),
+        idm.FieldId("disp", 1),
+    ]
+
+    for fid in candidates:
+        if data.has_field(fid):
+            return fid
+
+    # nothing matched; surface available fields for debugging
+    available = []
+    try:
+        available = [f.identity.get_string() for f in data.get_all_fields()]
+    except Exception:
+        pass
+    raise RuntimeError("no displacement field found; available fields: {}".format(
+        ", ".join(available)))
+
+
 def extract_sim_series(sname, sensor_x=SENSOR_X, wdir=SIM_WDIR):
     """Extract top_disp at sensor positions. Returns time array (s) and matrix (sensors x time) in microns."""
     dma = idm.DataManagerAnalysis(pp.sname_to_sname(sname), wdir)
@@ -130,10 +167,15 @@ def extract_sim_series(sname, sensor_x=SENSOR_X, wdir=SIM_WDIR):
         node_indices.append(idx)
 
     time_fid = idm.FieldId("time")
-    top_disp_fid = idm.FieldId("top_disp", 0)
+    disp_fid = select_disp_field(data)
 
-    # time array
-    time_steps = np.arange(data.get_t_index("last"))
+    # scale factor: simulations store half-slip on each side when using top/bot fields
+    # If we are using top_disp, double it to get total slip; otherwise leave unchanged.
+    slip_factor = 2.0 if disp_fid.name.startswith("top_disp") else 1.0
+
+    # time array (include last index)
+    last_idx = data.get_t_index("last")
+    time_steps = np.arange(last_idx + 1)
     times = []
     for t_idx in time_steps:
         t_val_container = data.get_field_at_t_index(time_fid, t_idx)[0]
@@ -141,16 +183,22 @@ def extract_sim_series(sname, sensor_x=SENSOR_X, wdir=SIM_WDIR):
         times.append(t_val)
     times = np.array(times)
 
-    # displacement matrix
+    # displacement matrix (microns, zeroed to first sample)
     disp = np.zeros((len(sensor_x), len(times)))
     for j, n_idx in enumerate(node_indices):
         vals = []
         for t_idx in time_steps:
-            snap = data.get_field_at_t_index(top_disp_fid, t_idx)[0]
+            snap = data.get_field_at_t_index(disp_fid, t_idx)[0]
             vals.append(snap[n_idx])
-        disp[j, :] = np.array(vals) * 2.0 * 1e6  # convert to total slip microns
+        series = np.array(vals)
+        series = (series - series[0]) * slip_factor * 1e6
+        disp[j, :] = series
 
-    return times, disp
+    # align onset to t=0 for this simulation
+    t_onset_sim = estimate_onset(times, disp)
+    times_aligned = times - t_onset_sim
+
+    return times_aligned, disp
 
 
 def interpolate_to_grid(target_t, src_t, src_y):
