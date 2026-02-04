@@ -407,7 +407,16 @@ def load_experimental_data(csv_path, nb_nodes=2048, duration=0.015, nb_steps=Non
     
     return t_sim, exp_data_dict, exp_positions
 
-def plot_combined_waterfall(sname, group, fldid=None, exp_data_dict=None, exp_positions=None, scaling_factor=None, **kwargs):
+def plot_combined_waterfall(
+    sname,
+    group,
+    fldid=None,
+    exp_data_dict=None,
+    exp_positions=None,
+    exp_times=None,
+    scaling_factor=None,
+    **kwargs
+):
     """
     Plots waterfall with both simulation and experimental data overlaid.
     """
@@ -472,7 +481,10 @@ def plot_combined_waterfall(sname, group, fldid=None, exp_data_dict=None, exp_po
                     break
             
             if closest_idx is not None:
-                exp_microns = exp_data * 1e6
+                exp_series = exp_data
+                if exp_times is not None and len(exp_series) != len(times):
+                    exp_series = np.interp(times, exp_times, exp_series, left=exp_series[0], right=exp_series[-1])
+                exp_microns = exp_series * 1e6
                 visual_trace_exp = (exp_microns * scaling_factor) + closest_idx
                 ax.plot(times, visual_trace_exp, color='blue', linewidth=1.2, linestyle='--', 
                         label='Experimental' if sensor_idx == list(exp_data_dict.keys())[0] else "")
@@ -781,7 +793,7 @@ if __name__ == "__main__":
     
     if exp_csv_path:
         try:
-            _, exp_data_dict, exp_positions = load_experimental_data(exp_csv_path)
+            exp_times, exp_data_dict, exp_positions = load_experimental_data(exp_csv_path)
             print("[OK] Experimental data loaded successfully from: {}".format(exp_csv_path))
             
             # Detect experimental time resolution for downsampling
@@ -835,8 +847,16 @@ if __name__ == "__main__":
         if exp_dt is not None:
             kwargs_downsampled['target_dt'] = exp_dt
         
-        fig_combined = plot_combined_waterfall(sname, group, fldid, exp_data_dict, exp_positions, 
-                                              scaling_factor=scale, **kwargs_downsampled)
+        fig_combined = plot_combined_waterfall(
+            sname,
+            group,
+            fldid,
+            exp_data_dict,
+            exp_positions,
+            exp_times=exp_times,
+            scaling_factor=scale,
+            **kwargs_downsampled
+        )
         
         combined_save_name = "{}_combined_waterfall.png".format(sname)
         combined_save_path = os.path.join(OUTPUT_DIR, combined_save_name)
