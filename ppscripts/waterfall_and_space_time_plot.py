@@ -812,16 +812,19 @@ if __name__ == "__main__":
     print("Simulation plot saved to: {}".format(save_path))
     plt.close(fig)
     
-    # 2. Generate Velocity Heatmap - FULL RESOLUTION
+    # 2. Generate Velocity Heatmap - FULL RESOLUTION (optional if field exists)
     print("\n=== Generating Velocity Heatmap (Full Resolution) ===")
-    fig_velo = plot_velocity_heatmap(sname, group, num_nodes=NUM_NODES_DEFAULT)
-    
-    velo_save_name = "{}_top_velo_heatmap.png".format(sname)
-    velo_save_path = os.path.join(OUTPUT_DIR, velo_save_name)
-    
-    fig_velo.savefig(velo_save_path, dpi=300)
-    print("Velocity heatmap saved to: {}".format(velo_save_path))
-    plt.close(fig_velo)
+    try:
+        fig_velo = plot_velocity_heatmap(sname, group, num_nodes=NUM_NODES_DEFAULT)
+        
+        velo_save_name = "{}_top_velo_heatmap.png".format(sname)
+        velo_save_path = os.path.join(OUTPUT_DIR, velo_save_name)
+        
+        fig_velo.savefig(velo_save_path, dpi=300)
+        print("Velocity heatmap saved to: {}".format(velo_save_path))
+        plt.close(fig_velo)
+    except (KeyError, RuntimeError) as e:
+        print("[INFO] Velocity field not available, skipping velocity heatmap: {}".format(e))
     
     # 3. Generate Combined Waterfall (Simulation + Experimental) - DOWNSAMPLED for efficiency
     if exp_data_dict:
