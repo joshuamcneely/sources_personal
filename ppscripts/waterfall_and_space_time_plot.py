@@ -167,6 +167,19 @@ def get_node_time_histories(sname, group, fldid=None, num_nodes=16, **kwargs):
             field_snapshot = data.get_field_at_t_index(fldid, t_idx)[0]
             vals.append(field_snapshot[n_idx])
         node_data[n_idx] = np.array(vals)
+    
+    # DEBUG: Check if data is all zeros or identical
+    all_vals = np.array([node_data[n_idx] for n_idx in node_indices])
+    print("  Data shape: {}".format(all_vals.shape))
+    print("  Data range: [{:.6e}, {:.6e}]".format(np.min(all_vals), np.max(all_vals)))
+    if np.allclose(all_vals, 0.0):
+        print("  WARNING: All data is zero!")
+    if len(node_indices) > 1:
+        # Check if all traces are identical
+        first_trace = node_data[node_indices[0]]
+        all_identical = all(np.allclose(node_data[idx], first_trace) for idx in node_indices[1:])
+        if all_identical:
+            print("  WARNING: All traces are identical!")
 
     # slip scaling factor: double only for top_disp* fields
     slip_factor = 2.0 if str(fldid.name).startswith('top_disp') else 1.0
@@ -205,6 +218,16 @@ def plot_dual_visualization(sname, group, fldid=None, scaling_factor=None, **kwa
             pos_val = pos_raw
             
         y_tick_labels.append("{:.2f} m".format(pos_val))
+    
+    # DEBUG: Check processed matrix
+    print(" >> U_matrix shape: {}".format(U_matrix.shape))
+    print(" >> U_matrix range after processing: [{:.4f}, {:.4f}] microns".format(np.min(U_matrix), np.max(U_matrix)))
+    if np.allclose(U_matrix, 0.0):
+        print(" >> WARNING: U_matrix is all zeros after processing!")
+    if len(sorted_node_indices) > 1:
+        all_same = all(np.allclose(U_matrix[i, :], U_matrix[0, :]) for i in range(1, len(sorted_node_indices)))
+        if all_same:
+            print(" >> WARNING: All rows in U_matrix are identical!")
 
     # --- 2. Auto-Scaling Logic (Visual Only) ---
     if scaling_factor is None:
@@ -331,7 +354,7 @@ def plot_velocity_heatmap(sname, group, **kwargs):
 def load_experimental_data(csv_path, nb_nodes=2048, duration=0.015, nb_steps=None):
     """
     Load and align experimental data from CSV.
-    Returns: times, data_dict (indexed by spatial position), positions
+    Returns: times, data_dict (indexed by sensor index 0-15), positions
     """
     print(f"Loading experimental data from: {csv_path}")
     
@@ -342,6 +365,8 @@ def load_experimental_data(csv_path, nb_nodes=2048, duration=0.015, nb_steps=Non
     
     t_full = df[time_col].values
     U_raw = df[sensor_cols].values.T  # Shape: (n_sensors, n_times)
+    
+    print(f"  Raw data shape: {U_raw.shape} (sensors x times)")
     
     # Calculate relative slip
     U_relative_full = np.zeros_like(U_raw)
@@ -357,7 +382,7 @@ def load_experimental_data(csv_path, nb_nodes=2048, duration=0.015, nb_steps=Non
     except:
         t_onset = t_full[0]
     
-    print(f"Experimental onset detected at t = {t_onset:.6f} s")
+    print(f"  Experimental onset detected at t = {t_onset:.6f} s")
     
     # Time alignment
     t_aligned = t_full - t_onset
@@ -378,32 +403,29 @@ def load_experimental_data(csv_path, nb_nodes=2048, duration=0.015, nb_steps=Non
     t_windowed = t_aligned[window_mask]
     U_windowed = U_relative_full[:, window_mask]
     
-    print(f"Extracted {len(t_windowed)} experimental time points")
+    print(f"  Extracted {len(t_windowed)} experimental time points")
+    print(f"  Windowed data shape: {U_windowed.shape} (sensors x times)")
     
     # Sensor positions (assuming McKlaskey setup: 0.05 to 3.05 m, 0.2 m spacing)
     sensors_x = np.arange(0.05, 3.05 + 0.01, 0.2)
-    dx = 6.0 / nb_nodes
-    sensor_nodes = np.round(sensors_x / dx).astype(int)
-    valid_mask = sensor_nodes < nb_nodes
-    valid_sensor_nodes = sensor_nodes[valid_mask]
-    valid_positions = sensors_x[valid_mask]
+    n_sensors = min(len(sensors_x), U_windowed.shape[0])
     
     # Map to simulation time grid
     t_sim = t_windowed - t_windowed[0]
-    dt_sim = duration / nb_steps
     
     exp_data_dict = {}
     exp_positions = {}
     
-    for sensor_idx, pos in zip(valid_sensor_nodes, valid_positions):
-        slip_microns = U_windowed[sensor_idx - valid_sensor_nodes[0], :] if sensor_idx - valid_sensor_nodes[0] < U_windowed.shape[0] else np.zeros(len(t_windowed))
-        slip_meters = slip_microns * 1e-6  # Convert to meters (experimental already total slip)
+    # Use sequential sensor indices (0 to n_sensors-1)
+    for i in range(n_sensors):
+        slip_microns = U_windowed[i, :]
+        slip_meters = slip_microns * 1e-6  # Convert to meters
         
-        # Interpolate to simulation timesteps
-        sim_times = np.arange(nb_steps + 1) * dt_sim
-        exp_interp = np.interp(sim_times, t_sim, slip_meters, left=0.0, right=slip_meters[-1])
-        exp_data_dict[sensor_idx] = exp_interp
-        exp_positions[sensor_idx] = pos
+        # Store with original time grid (don't interpolate here)
+        exp_data_dict[i] = slip_meters
+        exp_positions[i] = sensors_x[i]
+    
+    print(f"  Loaded {len(exp_data_dict)} sensors at positions: {[exp_positions[k] for k in sorted(exp_positions.keys())]}")
     
     return t_sim, exp_data_dict, exp_positions
 
@@ -464,9 +486,11 @@ def plot_combined_waterfall(
         ax.plot(times, visual_trace_sim, color='red', linewidth=1.2, label='Simulation' if i == 0 else "")
 
     # Plot experimental data (blue) if provided
-    if exp_data_dict is not None and exp_positions is not None:
-        for sensor_idx, exp_data in exp_data_dict.items():
+    if exp_data_dict is not None and exp_positions is not None and exp_times is not None:
+        for sensor_idx in sorted(exp_data_dict.keys()):
+            exp_data = exp_data_dict[sensor_idx]
             pos = exp_positions[sensor_idx]
+            
             # Find closest node index for y-position
             closest_idx = None
             for i, n_idx in enumerate(sorted_node_indices):
@@ -481,22 +505,12 @@ def plot_combined_waterfall(
                     break
             
             if closest_idx is not None:
-                exp_series = exp_data
-                if exp_times is not None and len(exp_series) != len(times):
-                    if len(exp_times) == len(exp_series):
-                        exp_series = np.interp(times, exp_times, exp_series, left=exp_series[0], right=exp_series[-1])
-                    else:
-                        exp_series = np.interp(
-                            times,
-                            np.linspace(times.min(), times.max(), len(exp_series)),
-                            exp_series,
-                            left=exp_series[0],
-                            right=exp_series[-1],
-                        )
+                # Interpolate experimental data to simulation times
+                exp_series = np.interp(times, exp_times, exp_data, left=exp_data[0], right=exp_data[-1])
                 exp_microns = exp_series * 1e6
                 visual_trace_exp = (exp_microns * scaling_factor) + closest_idx
                 ax.plot(times, visual_trace_exp, color='blue', linewidth=1.2, linestyle='--', 
-                        label='Experimental' if sensor_idx == list(exp_data_dict.keys())[0] else "")
+                        label='Experimental' if sensor_idx == 0 else "")
 
     ax.set_xlabel('Time (s)', fontsize=12)
     ax.set_ylabel('Spatial Position (m)', fontsize=12)
@@ -511,7 +525,7 @@ def plot_combined_waterfall(
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     return fig
 
-def plot_experimental_heatmap(exp_data_dict, exp_positions, sname, **kwargs):
+def plot_experimental_heatmap(exp_data_dict, exp_positions, exp_times, sname, **kwargs):
     """
     Plots heatmap of experimental data only.
     """
@@ -523,6 +537,8 @@ def plot_experimental_heatmap(exp_data_dict, exp_positions, sname, **kwargs):
     sorted_sensors = sorted(exp_positions.items(), key=lambda x: x[1])
     sorted_indices = [s[0] for s in sorted_sensors]
     sorted_positions = [s[1] for s in sorted_sensors]
+    
+    print(f"  Experimental heatmap: {len(sorted_indices)} sensors")
     
     # Build matrix
     n_sensors = len(sorted_indices)
@@ -540,13 +556,19 @@ def plot_experimental_heatmap(exp_data_dict, exp_positions, sname, **kwargs):
     
     print(" >> Experimental Data Range: {:.4f} to {:.4f} microns".format(np.min(U_exp_matrix), np.max(U_exp_matrix)))
     
+    # Use time extent if available
+    if exp_times is not None and len(exp_times) > 0:
+        time_extent = [exp_times[0], exp_times[-1], -0.5, n_sensors-0.5]
+    else:
+        time_extent = [0, n_times-1, -0.5, n_sensors-0.5]
+    
     im = ax.imshow(U_exp_matrix, aspect='auto', origin='lower', cmap='viridis',
                     interpolation='nearest',
-                    extent=[0, n_times, -0.5, n_sensors-0.5])
+                    extent=time_extent)
     
-    ax.set_xlabel('Time Step', fontsize=12)
+    ax.set_xlabel('Time (s)' if exp_times is not None else 'Time Step', fontsize=12)
     ax.set_ylabel('Spatial Position (m)', fontsize=12)
-    ax.set_title("Experimental Heatmap", fontsize=14)
+    ax.set_title("Experimental Heatmap: {} sensors".format(n_sensors), fontsize=14)
     
     ax.set_yticks(np.arange(n_sensors))
     ax.set_yticklabels(y_tick_labels)
@@ -877,7 +899,7 @@ if __name__ == "__main__":
     # 4. Generate Experimental Heatmap - NATIVE RESOLUTION (as measured)
     if exp_data_dict:
         print("\n=== Generating Experimental Heatmap (Native Resolution) ===")
-        fig_exp = plot_experimental_heatmap(exp_data_dict, exp_positions, sname)
+        fig_exp = plot_experimental_heatmap(exp_data_dict, exp_positions, exp_times, sname)
         
         exp_save_name = "{}_experimental_heatmap.png".format(sname)
         exp_save_path = os.path.join(OUTPUT_DIR, exp_save_name)
