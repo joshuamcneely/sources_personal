@@ -483,7 +483,16 @@ def plot_combined_waterfall(
             if closest_idx is not None:
                 exp_series = exp_data
                 if exp_times is not None and len(exp_series) != len(times):
-                    exp_series = np.interp(times, exp_times, exp_series, left=exp_series[0], right=exp_series[-1])
+                    if len(exp_times) == len(exp_series):
+                        exp_series = np.interp(times, exp_times, exp_series, left=exp_series[0], right=exp_series[-1])
+                    else:
+                        exp_series = np.interp(
+                            times,
+                            np.linspace(times.min(), times.max(), len(exp_series)),
+                            exp_series,
+                            left=exp_series[0],
+                            right=exp_series[-1],
+                        )
                 exp_microns = exp_series * 1e6
                 visual_trace_exp = (exp_microns * scaling_factor) + closest_idx
                 ax.plot(times, visual_trace_exp, color='blue', linewidth=1.2, linestyle='--', 
@@ -798,9 +807,9 @@ if __name__ == "__main__":
             
             # Detect experimental time resolution for downsampling
             df = pd.read_csv(exp_csv_path)
-            exp_times = df[df.columns[0]].values
-            if len(exp_times) > 1:
-                exp_dt = np.median(np.diff(exp_times))
+            exp_times_raw = df[df.columns[0]].values
+            if len(exp_times_raw) > 1:
+                exp_dt = np.median(np.diff(exp_times_raw))
                 print("[OK] Detected experimental time resolution: {:.2e} s ({:.2f} us)".format(
                     exp_dt, exp_dt * 1e6))
         except Exception as e:
