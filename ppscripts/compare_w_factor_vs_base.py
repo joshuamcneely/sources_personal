@@ -10,6 +10,7 @@ This helps visualize the impact of different w_factor values on data assimilatio
 
 Usage:
     python compare_w_factor_vs_base.py <exp_csv> [--wdir ./data] [--plot-dir plots/w_factor_comparison]
+    python compare_w_factor_vs_base.py --from-results [--error-dir plots/error_plots] [--plot-dir plots/w_factor_comparison]
 """
 from __future__ import print_function, division, absolute_import
 
@@ -47,6 +48,68 @@ def get_dd_sim_name(base_index, w_factor_index):
     """
     sim_id = w_factor_index * len(BASE_SIMS) + base_index + 1
     return "dd_exp_w_factor_study_{:03d}".format(sim_id)
+
+
+def parse_dd_sim_id(sim_name):
+    """Return (base_index, w_factor_index) from dd_exp_w_factor_study_XXX."""
+    try:
+        sim_id = int(sim_name.split('_')[-1])
+    except Exception:
+        return None, None
+    base_index = (sim_id - 1) % len(BASE_SIMS)
+    w_factor_index = (sim_id - 1) // len(BASE_SIMS)
+    if w_factor_index < 0 or w_factor_index >= len(W_FACTORS):
+        return None, None
+    return base_index, w_factor_index
+
+
+def load_results_from_csv(error_dir):
+    """Load precomputed error results and group by base simulation."""
+    dd_file = os.path.join(error_dir, 'dd_study_ALL_error_results.csv')
+    gabs_file = os.path.join(error_dir, 'gabs_fine_error_results.csv')
+
+    if not os.path.exists(dd_file):
+        raise RuntimeError('Missing dd results file: {}'.format(dd_file))
+    if not os.path.exists(gabs_file):
+        raise RuntimeError('Missing gabs results file: {}'.format(gabs_file))
+
+    dd_df = pd.read_csv(dd_file)
+    gabs_df = pd.read_csv(gabs_file)
+
+    results = {base_sim: {'base': None, 'w_factors': []} for base_sim in BASE_SIMS}
+
+    # Base simulations from gabs_fine_error_results.csv
+    for _, row in gabs_df.iterrows():
+        sim_name = row['simulation']
+        if sim_name in results:
+            results[sim_name]['base'] = {
+                'sim_name': sim_name,
+                'l2_norm': row['l2_norm'],
+                'linf_norm': row['linf_norm']
+            }
+
+    # dd_exp_w_factor_study results from dd_study_ALL_error_results.csv
+    for _, row in dd_df.iterrows():
+        sim_name = row['simulation']
+        base_index, w_factor_index = parse_dd_sim_id(sim_name)
+        if base_index is None:
+            continue
+        base_sim = BASE_SIMS[base_index]
+        w_factor = W_FACTORS[w_factor_index]
+        results[base_sim]['w_factors'].append({
+            'sim_name': sim_name,
+            'w_factor': w_factor,
+            'l2_norm': row['l2_norm'],
+            'linf_norm': row['linf_norm']
+        })
+
+    # Sort w_factor entries for consistency
+    for base_sim in results:
+        results[base_sim]['w_factors'] = sorted(
+            results[base_sim]['w_factors'], key=lambda r: r['w_factor']
+        )
+
+    return results
 
 
 def compute_all_errors(exp_t, exp_data, exp_positions, args):
@@ -251,7 +314,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Compare w_factor study simulations against their base simulations'
     )
-    parser.add_argument('exp_csv', help='Path to experimental CSV file')
+    parser.add_argument('exp_csv', nargs='?', help='Path to experimental CSV file')
     parser.add_argument('--group', default='interface', help='Field collection group (default: interface)')
     parser.add_argument('--wdir', default='./data', help='Simulation data directory (default: ./data)')
     parser.add_argument('--t-min', type=float, help='Start time for comparison window')
@@ -260,24 +323,36 @@ def main():
                         help='Use dense interpolated grid instead of experimental time points only')
     parser.add_argument('--plot-dir', default='plots/w_factor_comparison',
                         help='Directory for output plots (default: plots/w_factor_comparison)')
+    parser.add_argument('--from-results', action='store_true',
+                        help='Use precomputed error results from plots/error_plots')
+    parser.add_argument('--error-dir', default='plots/error_plots',
+                        help='Directory containing dd_study_ALL_error_results.csv and gabs_fine_error_results.csv')
     
     args = parser.parse_args()
     
     # Create output directory
     if not os.path.exists(args.plot_dir):
         os.makedirs(args.plot_dir)
-    
-    # Load experimental data
-    print("\n" + "="*70)
-    print("Loading Experimental Data")
-    print("="*70)
-    exp_t, exp_data, exp_positions = load_experimental_data(args.exp_csv)
-    
-    # Compute all errors
-    print("\n" + "="*70)
-    print("Computing Error Norms")
-    print("="*70)
-    results = compute_all_errors(exp_t, exp_data, exp_positions, args)
+
+    if args.from_results:
+        print("\n" + "="*70)
+        print("Loading Precomputed Error Results")
+        print("="*70)
+        results = load_results_from_csv(args.error_dir)
+    else:
+        if not args.exp_csv:
+            raise SystemExit('exp_csv is required unless --from-results is set')
+        # Load experimental data
+        print("\n" + "="*70)
+        print("Loading Experimental Data")
+        print("="*70)
+        exp_t, exp_data, exp_positions = load_experimental_data(args.exp_csv)
+
+        # Compute all errors
+        print("\n" + "="*70)
+        print("Computing Error Norms")
+        print("="*70)
+        results = compute_all_errors(exp_t, exp_data, exp_positions, args)
     
     # Generate plots
     print("\n" + "="*70)

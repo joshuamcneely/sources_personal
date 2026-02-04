@@ -24,9 +24,6 @@ PLOT_DIR="$SCRIPT_DIR/plots/w_factor_comparison"
 
 cd "$SCRIPT_DIR" || exit 1
 
-# Activate Python environment
-source "$HOME/python_env/bin/activate"
-
 # Create output directories
 mkdir -p "$PLOT_DIR"
 mkdir -p logs
