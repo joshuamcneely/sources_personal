@@ -27,12 +27,6 @@ cd "$SCRIPT_DIR" || exit 1
 # Activate Python environment
 source "$HOME/python_env/bin/activate"
 
-# Verify experimental data exists
-if [ ! -f "$EXP_CSV" ]; then
-    echo "[ERROR] Experimental data not found: $EXP_CSV"
-    exit 1
-fi
-
 # Create output directories
 mkdir -p "$PLOT_DIR"
 mkdir -p logs
@@ -44,14 +38,13 @@ echo "  Experimental:  $EXP_CSV"
 echo "  Plot output:   $PLOT_DIR"
 echo ""
 
-# Run comparison
-echo "[INFO] Starting w_factor comparison analysis..."
+# Run comparison (use precomputed error results)
+echo "[INFO] Starting w_factor comparison analysis from existing error results..."
 echo ""
 
 python compare_w_factor_vs_base.py \
-    "$EXP_CSV" \
-    --wdir "$DATA_DIR" \
-    --group interface \
+    --from-results \
+    --error-dir "$SCRIPT_DIR/plots/error_plots" \
     --plot-dir "$PLOT_DIR"
 
 EXIT_CODE=$?
