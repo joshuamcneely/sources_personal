@@ -64,9 +64,9 @@ else
     exit 1
 fi
 
-echo ""_NAME
+echo ""
 echo "4. Running test waterfall plot..."
-python waterfall_and_space_time_plot.py $TEST_SIM interface auto $EXP_CSV
+python waterfall_and_space_time_plot.py $TEST_SIM_NAME interface auto $EXP_CSV
 
 if [ $? -eq 0 ]; then
     echo ""
