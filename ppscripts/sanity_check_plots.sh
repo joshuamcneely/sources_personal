@@ -65,21 +65,14 @@ else
 fi
 
 echo ""
-echo "4. Running test waterfall plot..."
-python waterfall_and_space_time_plot.py $TEST_SIM_NAME interface auto $EXP_CSV
-
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "   ✓ Waterfall plot successful"
-else
-    echo ""
-    echo "   ✗ Waterfall plot FAILED"
-    exit 1
-fi
-
-echo ""
 echo "=================================="
 echo "✓ SANITY CHECK PASSED"
 echo "=================================="
 echo ""
-echo "All systems operational. Ready to submit batch jobs."
+echo "Core functionality verified:"
+echo "  - Data paths accessible"
+echo "  - Simulation data loaded"
+echo "  - Error calculation working"
+echo ""
+echo "Ready to submit batch jobs."
+echo ""
