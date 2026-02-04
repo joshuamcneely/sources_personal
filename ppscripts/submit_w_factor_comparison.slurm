@@ -6,7 +6,6 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
-#SBATCH --partition=icelake
 
 # w_factor Comparison Analysis
 # Compares each base simulation against its 6 w_factor variants
