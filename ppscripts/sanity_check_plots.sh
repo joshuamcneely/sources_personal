@@ -39,7 +39,7 @@ fi
 
 echo ""
 echo "2. Testing processed simulation data..."
-TEST_SIM="gabs_fine_124"
+TEST_SIM="gabs_fine_124-datamanager-files"
 if [ -d "$DATA_DIR/$TEST_SIM" ]; then
     echo "   ✓ Test simulation exists: $TEST_SIM"
 else
@@ -51,7 +51,9 @@ fi
 
 echo ""
 echo "3. Running test error calculation..."
-python calculate_slip_error_norms.py $TEST_SIM $EXP_CSV --wdir $DATA_DIR --group interface
+# Strip the -datamanager-files suffix for Python scripts
+TEST_SIM_NAME="${TEST_SIM%-datamanager-files}"
+python calculate_slip_error_norms.py $TEST_SIM_NAME $EXP_CSV --wdir $DATA_DIR --group interface
 
 if [ $? -eq 0 ]; then
     echo ""
@@ -62,7 +64,7 @@ else
     exit 1
 fi
 
-echo ""
+echo ""_NAME
 echo "4. Running test waterfall plot..."
 python waterfall_and_space_time_plot.py $TEST_SIM interface auto $EXP_CSV
 
