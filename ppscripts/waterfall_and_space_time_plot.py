@@ -238,7 +238,8 @@ def plot_dual_visualization(sname, group, fldid=None, scaling_factor=None, **kwa
 
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Spatial Position (m)')
-    ax1.set_title("Waterfall: Slip ({})".format(fldid.get_string()))
+    fld_name = fldid.get_string() if fldid is not None else 'auto-detected field'
+    ax1.set_title("Waterfall: Slip ({})".format(fld_name))
     
     ax1.set_yticks(np.arange(len(sorted_node_indices)))
     ax1.set_yticklabels(y_tick_labels)
