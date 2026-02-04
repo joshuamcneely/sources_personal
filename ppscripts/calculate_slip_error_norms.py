@@ -193,18 +193,21 @@ def compute_error_norms(sim_t, sim_data, exp_t, exp_data, t_min=None, t_max=None
     print("\n  Comparison window: [{:.6f}, {:.6f}] s".format(t_start, t_end))
     
     if use_exp_times:
-        # Compare only at experimental time points (exact comparison, no interpolation)
+        # Compare only at experimental time points (nearest neighbor, no interpolation)
         exp_mask = (exp_t >= t_start) & (exp_t <= t_end)
         common_t = exp_t[exp_mask]
         
         print("  Using experimental time points: {} points".format(len(common_t)))
         
-        # Interpolate simulation to experimental times
+        # Find nearest simulation time indices for each experimental time
         sim_interp = np.zeros((n_sensors, len(common_t)))
         exp_interp = np.zeros((n_sensors, len(common_t)))
         
         for i in range(n_sensors):
-            sim_interp[i, :] = np.interp(common_t, sim_t, sim_data[i, :])
+            for j, t in enumerate(common_t):
+                # Find closest simulation time index
+                idx = np.argmin(np.abs(sim_t - t))
+                sim_interp[i, j] = sim_data[i, idx]
             exp_interp[i, :] = exp_data[i, exp_mask]
     else:
         # Use dense common grid (original behavior)
