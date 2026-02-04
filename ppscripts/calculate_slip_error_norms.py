@@ -250,19 +250,19 @@ def print_results(sim_name, results):
     print("\n" + "="*60)
     print("RESULTS FOR: {}".format(sim_name))
     print("="*60)
-    print("L2 Norm (RMS Error):      {:.4f} µm".format(results['l2_norm']))
-    print("L-infinity Norm (Max):    {:.4f} µm".format(results['linf_norm']))
+    print("L2 Norm (RMS Error):      {:.4f} microns".format(results['l2_norm']))
+    print("L-infinity Norm (Max):    {:.4f} microns".format(results['linf_norm']))
     print("\nNorm Calculation:")
-    print("  L2:        sqrt(mean(error²)) over all sensors & time")
+    print("  L2:        sqrt(mean(error^2)) over all sensors & time")
     print("  L-infinity: max(|error|) over all sensors & time")
     print("\nComparison Stats:")
     print("  Sensors compared:       {}".format(results['n_sensors']))
     print("  Time points:            {}".format(results['n_time_points']))
     print("  Time window:            [{:.4f}, {:.4f}] s".format(*results['time_window']))
-    print("\nPer-Sensor RMSE (µm):")
+    print("\nPer-Sensor RMSE (microns):")
     for i, rmse in enumerate(results['rmse_per_sensor']):
         print("  Sensor {:2d}: {:.4f}".format(i, rmse))
-    print("\nPer-Sensor Max Error (µm):")
+    print("\nPer-Sensor Max Error (microns):")
     for i, max_err in enumerate(results['max_error_per_sensor']):
         print("  Sensor {:2d}: {:.4f}".format(i, max_err))
     print("="*60 + "\n")
@@ -303,16 +303,16 @@ def plot_error_norms(results_list, output_dir='plots'):
     
     ax1.plot(sim_ids, l2_norms, 'o-', color='blue', linewidth=2, markersize=6, label='L2 Norm')
     ax1.axhline(y=np.mean(l2_norms), color='red', linestyle='--', linewidth=1.5, 
-                label='Mean: {:.2f} µm'.format(np.mean(l2_norms)))
+                label='Mean: {:.2f} microns'.format(np.mean(l2_norms)))
     
     ax1.set_xlabel('Simulation ID', fontsize=12)
-    ax1.set_ylabel('L2 Norm (RMS Error) [µm]', fontsize=12)
+    ax1.set_ylabel('L2 Norm (RMS Error) [microns]', fontsize=12)
     ax1.set_title('L2 Norm (RMS Error) vs Simulation', fontsize=14, fontweight='bold')
     ax1.grid(True, alpha=0.3)
     ax1.legend(fontsize=10)
     
     # Add stats box
-    stats_text = 'Min: {:.2f} µm\nMax: {:.2f} µm\nStd: {:.2f} µm'.format(
+    stats_text = 'Min: {:.2f} microns\nMax: {:.2f} microns\nStd: {:.2f} microns'.format(
         np.min(l2_norms), np.max(l2_norms), np.std(l2_norms))
     ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, 
              fontsize=10, verticalalignment='top',
@@ -327,18 +327,18 @@ def plot_error_norms(results_list, output_dir='plots'):
     # --- Plot 2: L-infinity Norm ---
     fig2, ax2 = plt.subplots(figsize=(12, 6))
     
-    ax2.plot(sim_ids, linf_norms, 'o-', color='red', linewidth=2, markersize=6, label='L-∞ Norm')
+    ax2.plot(sim_ids, linf_norms, 'o-', color='red', linewidth=2, markersize=6, label='L-inf Norm')
     ax2.axhline(y=np.mean(linf_norms), color='blue', linestyle='--', linewidth=1.5,
-                label='Mean: {:.2f} µm'.format(np.mean(linf_norms)))
+                label='Mean: {:.2f} microns'.format(np.mean(linf_norms)))
     
     ax2.set_xlabel('Simulation ID', fontsize=12)
-    ax2.set_ylabel('L-∞ Norm (Max Error) [µm]', fontsize=12)
+    ax2.set_ylabel('L-inf Norm (Max Error) [microns]', fontsize=12)
     ax2.set_title('L-infinity Norm (Max Error) vs Simulation', fontsize=14, fontweight='bold')
     ax2.grid(True, alpha=0.3)
     ax2.legend(fontsize=10)
     
     # Add stats box
-    stats_text = 'Min: {:.2f} µm\nMax: {:.2f} µm\nStd: {:.2f} µm'.format(
+    stats_text = 'Min: {:.2f} microns\nMax: {:.2f} microns\nStd: {:.2f} microns'.format(
         np.min(linf_norms), np.max(linf_norms), np.std(linf_norms))
     ax2.text(0.02, 0.98, stats_text, transform=ax2.transAxes,
              fontsize=10, verticalalignment='top',
@@ -360,7 +360,7 @@ def plot_error_norms(results_list, output_dir='plots'):
     ax3a.plot(sim_ids, l2_normalized, 'o-', color='blue', linewidth=2, 
               markersize=6, label='L2 (normalized)')
     ax3a.plot(sim_ids, linf_normalized, 's-', color='red', linewidth=2,
-              markersize=6, label='L-∞ (normalized)')
+              markersize=6, label='L-inf (normalized)')
     ax3a.set_xlabel('Simulation ID', fontsize=12)
     ax3a.set_ylabel('Normalized Error', fontsize=12)
     ax3a.set_title('Normalized Error Comparison', fontsize=13, fontweight='bold')
@@ -371,9 +371,9 @@ def plot_error_norms(results_list, output_dir='plots'):
     ax3b.plot(sim_ids, l2_norms, 'o-', color='blue', linewidth=2,
               markersize=6, label='L2 Norm')
     ax3b.plot(sim_ids, linf_norms, 's-', color='red', linewidth=2,
-              markersize=6, label='L-∞ Norm')
+              markersize=6, label='L-inf Norm')
     ax3b.set_xlabel('Simulation ID', fontsize=12)
-    ax3b.set_ylabel('Error [µm]', fontsize=12)
+    ax3b.set_ylabel('Error [microns]', fontsize=12)
     ax3b.set_title('Absolute Error Comparison', fontsize=13, fontweight='bold')
     ax3b.grid(True, alpha=0.3)
     ax3b.legend(fontsize=10)

@@ -724,7 +724,7 @@ if __name__ == "__main__":
                 exp_times = df[df.columns[0]].values
                 if len(exp_times) > 1:
                     exp_dt = np.median(np.diff(exp_times))
-                    print("✓ Detected experimental time resolution: {:.2e} s".format(exp_dt))
+                    print("[OK] Detected experimental time resolution: {:.2e} s".format(exp_dt))
             except:
                 pass
         
@@ -781,19 +781,19 @@ if __name__ == "__main__":
     if exp_csv_path:
         try:
             _, exp_data_dict, exp_positions = load_experimental_data(exp_csv_path)
-            print("✓ Experimental data loaded successfully from: {}".format(exp_csv_path))
+            print("[OK] Experimental data loaded successfully from: {}".format(exp_csv_path))
             
             # Detect experimental time resolution for downsampling
             df = pd.read_csv(exp_csv_path)
             exp_times = df[df.columns[0]].values
             if len(exp_times) > 1:
                 exp_dt = np.median(np.diff(exp_times))
-                print("✓ Detected experimental time resolution: {:.2e} s ({:.2f} µs)".format(
+                print("[OK] Detected experimental time resolution: {:.2e} s ({:.2f} us)".format(
                     exp_dt, exp_dt * 1e6))
         except Exception as e:
-            print("⚠ Warning: Could not load experimental data: {}".format(e))
+            print("[WARNING] Could not load experimental data: {}".format(e))
     else:
-        print("ℹ No experimental CSV provided (optional)")
+        print("[INFO] No experimental CSV provided (optional)")
 
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
