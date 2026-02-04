@@ -236,7 +236,10 @@ def postprocess(sim_id,mode,new_sname=None):
     # find o-files
     ofiles = list()
     for s in sdirs:
-        ofpattern = '{}{}_{}.progress'.format(s+os.path.sep,basename,sim_id)
+        if basename:
+            ofpattern = '{}{}_{}.progress'.format(s+os.path.sep,basename,sim_id)
+        else:
+            ofpattern = '{}{}.progress'.format(s+os.path.sep,sim_id)
         #ofpattern = '{}{}.ubwonko.progress'.format(s+os.path.sep,sim_id) # please do not commit this!
         print('search for o-files with: {}'.format(ofpattern))
         ofile = glob.glob(ofpattern)
