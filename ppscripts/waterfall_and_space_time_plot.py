@@ -13,7 +13,7 @@ import pandas as pd
 OUTPUT_DIR = 'plots'
 ROI_X_MIN = 0.0
 ROI_X_MAX = 3.0  # STRICT LIMIT: Only plot sensors in this range (meters)
-NUM_NODES_DEFAULT = 48  # Increased for finer resolution
+NUM_NODES_DEFAULT = 16  # Match experimental sensor count
 # ---------------------
 
 def select_disp_field(data):
