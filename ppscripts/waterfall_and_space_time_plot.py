@@ -66,6 +66,13 @@ def get_node_time_histories(sname, group, fldid=None, num_nodes=16, **kwargs):
     if fldid is None:
         fldid = select_disp_field(data)
 
+    # Probe: list available fields and sample value
+    try:
+        available_fields = [f.identity.get_string() for f in data.get_all_fields()]
+        print("Available fields: {}".format(', '.join(available_fields)))
+    except Exception:
+        print("Available fields: [unable to query]")
+
     # 2. Determine Spatial Indices
     if data.has_field(idm.FieldId('position', 0)):
         pos_fldid = idm.FieldId('position', 0)
@@ -156,6 +163,14 @@ def get_node_time_histories(sname, group, fldid=None, num_nodes=16, **kwargs):
         time_array.append(t_val)
         
     time_array = np.array(time_array)
+
+    # Probe: sample value from first time and first node
+    try:
+        sample_snapshot = data.get_field_at_t_index(fldid, time_steps[0])[0]
+        sample_value = sample_snapshot[node_indices[0]]
+        print("Sample value at first node/time: {:.6e}".format(sample_value))
+    except Exception as e:
+        print("Sample value probe failed: {}".format(e))
 
     # 4. Extract Field Data for Selected Nodes
     node_data = {}
