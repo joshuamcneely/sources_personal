@@ -42,8 +42,13 @@ def get_node_time_histories(sname, group, fldid=None, num_nodes=16, **kwargs):
     """
     Extracts time histories for nodes strictly within the 0-3m ROI.
     Returns raw field data without normalization.
+    
+    Kwargs:
+        target_dt (float): Target time resolution for downsampling (e.g., 1e-6 for 1 microsecond)
+                          If None, uses full simulation resolution.
     """
     wdir = kwargs.get('wdir', './data')
+    target_dt = kwargs.get('target_dt', None)
     sname = pp.sname_to_sname(sname)
 
     # 1. Load Simulation Data
@@ -109,8 +114,36 @@ def get_node_time_histories(sname, group, fldid=None, num_nodes=16, **kwargs):
     else:
         last_idx = data.get_index_of_closest_time(idm.FieldId('time'), end_time)
 
-    # Extract time array (inclusive of last_idx)
-    time_steps = np.arange(start_idx, last_idx + 1)
+    # Extract time array - with optional downsampling
+    if target_dt is not None:
+        # Downsample to target resolution
+        time_fld = idm.FieldId("time")
+        
+        # Get first and last time to determine full span
+        t_start_val_container = data.get_field_at_t_index(time_fld, start_idx)[0]
+        t_start_val = t_start_val_container[0] if isinstance(t_start_val_container, (np.ndarray, list)) else t_start_val_container
+        
+        t_end_val_container = data.get_field_at_t_index(time_fld, last_idx)[0]
+        t_end_val = t_end_val_container[0] if isinstance(t_end_val_container, (np.ndarray, list)) else t_end_val_container
+        
+        # Create target times at desired resolution
+        target_times = np.arange(t_start_val, t_end_val + target_dt, target_dt)
+        
+        # Find closest indices for each target time
+        time_steps = []
+        for target_t in target_times:
+            idx = data.get_index_of_closest_time(time_fld, target_t)
+            if start_idx <= idx <= last_idx:
+                time_steps.append(idx)
+        
+        time_steps = np.array(time_steps)
+        print("Downsampling: Using {} time steps (target_dt={:.2e}s) out of {} available".format(
+            len(time_steps), target_dt, last_idx - start_idx + 1))
+    else:
+        # Use full resolution (inclusive of last_idx)
+        time_steps = np.arange(start_idx, last_idx + 1)
+        print("Using full time resolution: {} time steps".format(len(time_steps)))
+
     time_array = []
     
     time_fld = idm.FieldId("time")
@@ -503,19 +536,227 @@ def plot_experimental_heatmap(exp_data_dict, exp_positions, sname, **kwargs):
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     return fig
 
-if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        sys.exit('Usage: ./waterfall_and_space_time_plot.py <sname> <group> <fldid> [exp_csv_path] [scaling_factor]')
+def plot_multi_overlay_waterfall(sname_list, group, fldid=None, exp_csv_list=None, scaling_factor=None, **kwargs):
+    """
+    Plots waterfall with multiple simulations and/or multiple experimental datasets overlaid.
+    
+    Args:
+        sname_list: list of simulation names
+        exp_csv_list: list of experimental CSV paths (optional)
+    """
+    num_nodes = kwargs.get('num_nodes', NUM_NODES_DEFAULT)
+    kwargs_clean = dict(kwargs)
+    kwargs_clean.pop('num_nodes', None)
+    
+    # Color cycles
+    sim_colors = ['red', 'orange', 'purple', 'brown', 'pink']
+    exp_colors = ['blue', 'cyan', 'green', 'lime', 'teal']
+    
+    # --- 1. Load all simulations ---
+    sim_data_list = []
+    all_positions = None
+    sorted_node_indices = None
+    times = None
+    
+    for i, sname in enumerate(sname_list):
+        print("Loading simulation {}/{}: {}".format(i+1, len(sname_list), sname))
+        sim_times, data_dict, indices, positions, slip_factor = get_node_time_histories(
+            sname, group, fldid, num_nodes=num_nodes, **kwargs_clean
+        )
+        
+        # Use first simulation for spatial grid reference
+        if all_positions is None:
+            all_positions = positions
+            sorted_node_indices = sorted(indices)
+            times = sim_times
+        
+        # Convert to matrix
+        U_matrix = np.zeros((len(sorted_node_indices), len(sim_times)))
+        for j, n_idx in enumerate(sorted_node_indices):
+            if n_idx in data_dict:
+                series = data_dict[n_idx]
+                series = (series - series[0]) * slip_factor * 1e6
+                U_matrix[j, :] = series
+        
+        sim_data_list.append((sname, sim_times, U_matrix, sim_colors[i % len(sim_colors)]))
+    
+    # --- 2. Load all experimental datasets (if provided) ---
+    exp_data_list = []
+    if exp_csv_list:
+        for i, csv_path in enumerate(exp_csv_list):
+            print("Loading experimental data {}/{}: {}".format(i+1, len(exp_csv_list), csv_path))
+            try:
+                _, exp_dict, exp_pos = load_experimental_data(csv_path)
+                exp_data_list.append((csv_path, exp_dict, exp_pos, exp_colors[i % len(exp_colors)]))
+            except Exception as e:
+                print("Warning: Could not load {}: {}".format(csv_path, e))
+    
+    # --- 3. Auto-Scaling ---
+    if scaling_factor is None:
+        max_vals = [np.max(np.abs(d[2])) for d in sim_data_list]
+        max_val = max(max_vals) if max_vals else 1.0
+        scaling_factor = 1.5 / max_val
+        print("Auto-calculated scaling factor: {:.2e}".format(scaling_factor))
+    
+    # --- 4. Create y-axis labels ---
+    y_tick_labels = []
+    for n_idx in sorted_node_indices:
+        pos_raw = all_positions[n_idx]
+        if isinstance(pos_raw, (np.ndarray, list)) and len(pos_raw) > 0:
+            pos_val = pos_raw[0]
+        else:
+            pos_val = pos_raw
+        y_tick_labels.append("{:.2f} m".format(pos_val))
+    
+    # --- 5. Plotting ---
+    fig, ax = plt.subplots(figsize=(16, 10))
+    fig.suptitle('MULTI-OVERLAY: Simulations vs Experiments', fontsize=24, color='black', fontweight='bold')
+    
+    # Plot all simulations
+    for sname, sim_t, U_matrix, color in sim_data_list:
+        for i in range(len(sorted_node_indices)):
+            trace = U_matrix[i, :]
+            visual_trace = (trace * scaling_factor) + i
+            label = 'Sim: {}'.format(sname) if i == 0 else ""
+            ax.plot(sim_t, visual_trace, color=color, linewidth=1.0, alpha=0.7, label=label)
+    
+    # Plot all experimental datasets
+    for csv_name, exp_dict, exp_pos, color in exp_data_list:
+        base_name = os.path.basename(csv_name)
+        for sensor_idx, exp_data in exp_dict.items():
+            pos = exp_pos[sensor_idx]
+            # Find closest node for y-position
+            closest_idx = None
+            for i, n_idx in enumerate(sorted_node_indices):
+                node_pos_raw = all_positions[n_idx]
+                if isinstance(node_pos_raw, (np.ndarray, list)) and len(node_pos_raw) > 0:
+                    node_pos = node_pos_raw[0]
+                else:
+                    node_pos = node_pos_raw
+                
+                if abs(node_pos - pos) < 0.1:
+                    closest_idx = i
+                    break
+            
+            if closest_idx is not None:
+                exp_microns = exp_data * 1e6
+                visual_trace = (exp_microns * scaling_factor) + closest_idx
+                label = 'Exp: {}'.format(base_name) if sensor_idx == list(exp_dict.keys())[0] else ""
+                ax.plot(times, visual_trace, color=color, linewidth=1.2, linestyle='--', 
+                        alpha=0.8, label=label)
+    
+    ax.set_xlabel('Time (s)', fontsize=12)
+    ax.set_ylabel('Spatial Position (m)', fontsize=12)
+    ax.set_title("Multi-Overlay Waterfall", fontsize=14)
+    
+    ax.set_yticks(np.arange(len(sorted_node_indices)))
+    ax.set_yticklabels(y_tick_labels)
+    ax.grid(True, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+    ax.set_ylim(-1, len(sorted_node_indices))
+    ax.legend(loc='upper right', fontsize=10, ncol=2)
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    return fig
 
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        sys.exit('''Usage: ./waterfall_and_space_time_plot.py <sname> <group> [fldid] [exp_csv_path] [scaling_factor]
+        
+    OR for multi-overlay:
+        ./waterfall_and_space_time_plot.py --multi <group> [fldid] --sims sim1,sim2,sim3 --exps exp1.csv,exp2.csv
+    
+    Arguments:
+        sname           : Simulation name (e.g., dd_no_nucleation_data_only)
+        group           : Field collection group (e.g., interface)
+        fldid           : Field ID (e.g., top_disp, 0) or 'auto' to auto-detect [default: auto]
+        exp_csv_path    : Path to experimental CSV file (optional, for overlay)
+        scaling_factor  : Manual scaling factor for visualization (optional)
+    
+    Multi-overlay mode:
+        --multi         : Enable multi-overlay mode
+        --sims          : Comma-separated list of simulation names
+        --exps          : Comma-separated list of experimental CSV paths (optional)
+    
+    Examples:
+        python waterfall_and_space_time_plot.py dd_no_nucleation_data_only interface auto
+        python waterfall_and_space_time_plot.py dd_no_nucleation_data_only interface auto exp_data.csv
+        python waterfall_and_space_time_plot.py --multi interface auto --sims sim1,sim2,sim3 --exps exp1.csv,exp2.csv
+        ''')
+
+    # Check for multi-overlay mode
+    if sys.argv[1] == '--multi':
+        # Multi-overlay mode
+        group = str(sys.argv[2])
+        fldid_str = str(sys.argv[3]) if len(sys.argv) > 3 else 'auto'
+        fldid = None if fldid_str.lower() == 'auto' else idm.FieldId.string_to_fieldid(fldid_str)
+        
+        # Parse --sims and --exps
+        sim_list = []
+        exp_list = []
+        
+        i = 4
+        while i < len(sys.argv):
+            if sys.argv[i] == '--sims' and i+1 < len(sys.argv):
+                sim_list = sys.argv[i+1].split(',')
+                i += 2
+            elif sys.argv[i] == '--exps' and i+1 < len(sys.argv):
+                exp_list = sys.argv[i+1].split(',')
+                i += 2
+            else:
+                i += 1
+        
+        if not sim_list:
+            sys.exit("Error: --multi mode requires --sims argument")
+        
+        print("\n=== MULTI-OVERLAY MODE ===")
+        print("Simulations: {}".format(', '.join(sim_list)))
+        if exp_list:
+            print("Experiments: {}".format(', '.join(exp_list)))
+        
+        if not os.path.exists(OUTPUT_DIR):
+            os.makedirs(OUTPUT_DIR)
+        
+        # Detect experimental time resolution if experiments provided
+        exp_dt = None
+        if exp_list:
+            try:
+                df = pd.read_csv(exp_list[0])
+                exp_times = df[df.columns[0]].values
+                if len(exp_times) > 1:
+                    exp_dt = np.median(np.diff(exp_times))
+                    print("✓ Detected experimental time resolution: {:.2e} s".format(exp_dt))
+            except:
+                pass
+        
+        kwargs_overlay = {'num_nodes': NUM_NODES_DEFAULT}
+        if exp_dt:
+            kwargs_overlay['target_dt'] = exp_dt
+        
+        fig_multi = plot_multi_overlay_waterfall(
+            sim_list, group, fldid, 
+            exp_csv_list=exp_list if exp_list else None,
+            **kwargs_overlay
+        )
+        
+        save_name = "multi_overlay_{}_sims.png".format(len(sim_list))
+        save_path = os.path.join(OUTPUT_DIR, save_name)
+        fig_multi.savefig(save_path, dpi=300)
+        print("\nMulti-overlay plot saved to: {}".format(save_path))
+        plt.close(fig_multi)
+        
+        sys.exit(0)
+    
+    # Standard single-simulation mode
     sname = str(sys.argv[1])
     group = str(sys.argv[2])
-    fldid_str = str(sys.argv[3])
+    fldid_str = str(sys.argv[3]) if len(sys.argv) > 3 else 'auto'
     
     fldid = None if fldid_str.lower() == 'auto' else idm.FieldId.string_to_fieldid(fldid_str)
 
     exp_csv_path = None
     scale = None
     
+    # Parse remaining arguments (exp_csv_path and/or scaling_factor)
     if len(sys.argv) > 4:
         arg4 = sys.argv[4]
         # Check if it's a file path or a number
@@ -530,23 +771,36 @@ if __name__ == "__main__":
             try:
                 scale = float(arg4)
             except ValueError:
-                pass
+                exp_csv_path = arg4 if arg4 else None
 
     # Load experimental data if provided
     exp_data_dict = None
     exp_positions = None
+    exp_dt = None  # Experimental time resolution
+    
     if exp_csv_path:
         try:
             _, exp_data_dict, exp_positions = load_experimental_data(exp_csv_path)
+            print("✓ Experimental data loaded successfully from: {}".format(exp_csv_path))
+            
+            # Detect experimental time resolution for downsampling
+            df = pd.read_csv(exp_csv_path)
+            exp_times = df[df.columns[0]].values
+            if len(exp_times) > 1:
+                exp_dt = np.median(np.diff(exp_times))
+                print("✓ Detected experimental time resolution: {:.2e} s ({:.2f} µs)".format(
+                    exp_dt, exp_dt * 1e6))
         except Exception as e:
-            print(f"Warning: Could not load experimental data: {e}")
+            print("⚠ Warning: Could not load experimental data: {}".format(e))
+    else:
+        print("ℹ No experimental CSV provided (optional)")
 
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
         print("Created directory: {}".format(OUTPUT_DIR))
 
-    # 1. Generate Simulation Waterfall + Heatmap (dual visualization)
-    print("\n=== Generating Simulation Plots ===")
+    # 1. Generate Simulation Waterfall + Heatmap (dual visualization) - FULL RESOLUTION
+    print("\n=== Generating Simulation Plots (Full Resolution) ===")
     fig = plot_dual_visualization(sname, group, fldid, scaling_factor=scale, num_nodes=NUM_NODES_DEFAULT)
     
     safe_fld_str = fldid_str.replace(' ', '_')
@@ -557,8 +811,8 @@ if __name__ == "__main__":
     print("Simulation plot saved to: {}".format(save_path))
     plt.close(fig)
     
-    # 2. Generate Velocity Heatmap
-    print("\n=== Generating Velocity Heatmap ===")
+    # 2. Generate Velocity Heatmap - FULL RESOLUTION
+    print("\n=== Generating Velocity Heatmap (Full Resolution) ===")
     fig_velo = plot_velocity_heatmap(sname, group, num_nodes=NUM_NODES_DEFAULT)
     
     velo_save_name = "{}_top_velo_heatmap.png".format(sname)
@@ -568,11 +822,17 @@ if __name__ == "__main__":
     print("Velocity heatmap saved to: {}".format(velo_save_path))
     plt.close(fig_velo)
     
-    # 3. Generate Combined Waterfall (Simulation + Experimental)
+    # 3. Generate Combined Waterfall (Simulation + Experimental) - DOWNSAMPLED for efficiency
     if exp_data_dict:
-        print("\n=== Generating Combined Waterfall ===")
+        print("\n=== Generating Combined Waterfall (Downsampled to Exp Resolution) ===")
+        
+        # Use experimental time resolution for comparison plot
+        kwargs_downsampled = {'num_nodes': NUM_NODES_DEFAULT}
+        if exp_dt is not None:
+            kwargs_downsampled['target_dt'] = exp_dt
+        
         fig_combined = plot_combined_waterfall(sname, group, fldid, exp_data_dict, exp_positions, 
-                                              scaling_factor=scale, num_nodes=NUM_NODES_DEFAULT)
+                                              scaling_factor=scale, **kwargs_downsampled)
         
         combined_save_name = "{}_combined_waterfall.png".format(sname)
         combined_save_path = os.path.join(OUTPUT_DIR, combined_save_name)
@@ -581,9 +841,9 @@ if __name__ == "__main__":
         print("Combined waterfall saved to: {}".format(combined_save_path))
         plt.close(fig_combined)
     
-    # 4. Generate Experimental Heatmap
+    # 4. Generate Experimental Heatmap - NATIVE RESOLUTION (as measured)
     if exp_data_dict:
-        print("\n=== Generating Experimental Heatmap ===")
+        print("\n=== Generating Experimental Heatmap (Native Resolution) ===")
         fig_exp = plot_experimental_heatmap(exp_data_dict, exp_positions, sname)
         
         exp_save_name = "{}_experimental_heatmap.png".format(sname)
