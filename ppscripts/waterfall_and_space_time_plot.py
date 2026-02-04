@@ -254,7 +254,7 @@ def plot_dual_visualization(sname, group, fldid=None, scaling_factor=None, **kwa
                     extent=[times.min(), times.max(), -0.5, len(sorted_node_indices)-0.5])
     
     ax2.set_xlabel('Time (s)')
-    ax2.set_title("Heatmap: Slip ({})".format(fldid.get_string()))
+    ax2.set_title("Heatmap: Slip ({})".format(fld_name))
     
     ax2.set_yticks(np.arange(len(sorted_node_indices)))
     ax2.set_yticklabels(y_tick_labels)
