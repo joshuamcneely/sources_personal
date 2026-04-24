@@ -1,1 +1,4 @@
-/gpfs01/home/pmyjm22/uguca_project/results
+/Users/joshmcneely/uguca/build/simulations/simulation_outputs
+
+
+

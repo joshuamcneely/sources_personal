@@ -52,7 +52,7 @@ def track_Xc(sname, **kwargs):
         top_disp = data.get_full_field(idm.FieldId('top_disp',0))
         zero_precision = 1e-6*np.max(top_disp)
         is_sticking = top_disp < zero_precision
-        is_sticking.astype(np.int)
+        is_sticking.astype(int)
         
     position          = data.get_full_field(pos_fldid) 
     friction_traction = data.get_full_field(trac_fldid)

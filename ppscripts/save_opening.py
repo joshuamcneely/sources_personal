@@ -55,17 +55,17 @@ def get_opening(sname, **kwargs):
         top_disp = data.get_full_field(idm.FieldId('top_disp',1))
         bot_disp = data.get_full_field(idm.FieldId('bot_disp',1))
         is_in_contact = np.abs(top_disp - bot_disp) < zero_precision
-        is_in_contact.astype(np.int)
+        is_in_contact.astype(int)
     elif data.has_field(idm.FieldId('top_disp',1)):
         # convert displacement to is_sticking
         top_disp = data.get_full_field(idm.FieldId('top_disp',1))
         is_in_contact = top_disp < zero_precision
-        is_in_contact.astype(np.int)
+        is_in_contact.astype(int)
     elif data.has_field(idm.FieldId('cohesion',1)):
         # convert displacement to is_sticking
         cohesion = data.get_full_field(idm.FieldId('cohesion',1))
         is_in_contact = cohesion < -zero_precision
-        is_in_contact.astype(np.int)
+        is_in_contact.astype(int)
     else:
         print('do not have necessary fields')
         raise RuntimeError

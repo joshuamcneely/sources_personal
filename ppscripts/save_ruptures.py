@@ -32,30 +32,30 @@ def get_is_sticking(data,d_slip):
         top_disp_1 = data.get_full_field(idm.FieldId('top_disp',1))
         bot_disp_1 = data.get_full_field(idm.FieldId('bot_disp',1))
         is_sticking = np.sqrt((top_disp_0 - bot_disp_0)**2 + (top_disp_1 - bot_disp_1)**2) < d_slip
-        is_sticking = is_sticking.astype(np.int)
+        is_sticking = is_sticking.astype(int)
         
     elif (data.has_field(idm.FieldId('top_disp',1)) and d_slip):
         print("top only sqrt(d1^2)>d_slip")
         top_disp_1 = data.get_full_field(idm.FieldId('top_disp',1))
         is_sticking = np.sqrt(((top_disp_1)**2)) < d_slip/2.0
-        is_sticking = is_sticking.astype(np.int)
+        is_sticking = is_sticking.astype(int)
     elif (data.has_field(idm.FieldId('top_velo',1)) and d_slip):
         print("top only sqrt(d1^2)>d_slip")
         top_disp_1 = data.get_full_field(idm.FieldId('top_velo',1))
         is_sticking = np.sqrt(((top_disp_1)**2)) < d_slip/2.0
-        is_sticking = is_sticking.astype(np.int)
+        is_sticking = is_sticking.astype(int)
         
     elif data.has_field(idm.FieldId('top_disp',0)) and data.has_field(idm.FieldId('bot_disp',0)):
         # convert displacement to is_sticking
         top_disp = data.get_full_field(idm.FieldId('top_disp',0))
         bot_disp = data.get_full_field(idm.FieldId('bot_disp',0))
         is_sticking = np.abs(top_disp - bot_disp) < zero_precision
-        is_sticking = is_sticking.astype(np.int)
+        is_sticking = is_sticking.astype(int)
     elif data.has_field(idm.FieldId('top_disp',0)):
         # convert displacement to is_sticking
         top_disp = data.get_full_field(idm.FieldId('top_disp',0))
         is_sticking = top_disp < zero_precision
-        is_sticking = is_sticking.astype(np.int)
+        is_sticking = is_sticking.astype(int)
     elif data.has_field(idm.FieldId('displacement',0)):
         print("disp")
 
@@ -64,7 +64,7 @@ def get_is_sticking(data,d_slip):
         top_disp=np.array([top_disp[i]-top_disp[0] for i in range(top_disp.shape[0])])
         print(top_disp.shape)
         is_sticking = top_disp < zero_precision
-        is_sticking = is_sticking.astype(np.int)
+        is_sticking = is_sticking.astype(int)
     else:
         raise RuntimeError("no sticking data")
     return is_sticking

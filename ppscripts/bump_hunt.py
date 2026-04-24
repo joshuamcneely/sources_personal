@@ -77,7 +77,7 @@ def bump_hunt(sname,  **kwargs):
             zero_precision=1e-12
             top_disp = data.get_full_field(idm.FieldId('top_disp',0))
             is_sticking = top_disp < zero_precision
-            is_sticking.astype(np.int)
+            is_sticking.astype(int)
             
         position    = data.get_full_field(pos_fldid) 
 
